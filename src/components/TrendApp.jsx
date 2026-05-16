@@ -2,9 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowUpRight,
+  BadgeCheck,
+  BarChart3,
   Clock3,
   Code2,
+  Filter,
+  GitBranch,
   GitFork,
+  Radio,
   RefreshCw,
   Search,
   Star,
@@ -49,6 +54,21 @@ function timeAgo(value) {
 function formatGeneratedAt(value) {
   if (!value) return "等待生成";
   return timeAgo(value);
+}
+
+function formatWindow(hours) {
+  if (hours < 24) return `${hours} 小时`;
+  if (hours === 24) return "24 小时";
+  return `${hours / 24} 天`;
+}
+
+function getRepoDomain(repo) {
+  const text = `${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
+  if (text.includes("agent") || text.includes("llm") || text.includes("ai")) return "AI / Agent";
+  if (text.includes("database") || text.includes("sql") || text.includes("vector")) return "Data";
+  if (text.includes("ui") || text.includes("react") || text.includes("frontend")) return "Frontend";
+  if (text.includes("devops") || text.includes("kubernetes") || text.includes("docker")) return "Infra";
+  return repo.language || "Open Source";
 }
 
 function useApi(path, deps) {
@@ -112,9 +132,9 @@ function useStaticTrending(refreshTick, initialData) {
   return state;
 }
 
-function Stat({ icon: Icon, label, value }) {
+function Stat({ icon: Icon, label, value, tone = "" }) {
   return (
-    <div className="stat">
+    <div className={`stat ${tone}`}>
       <Icon size={17} />
       <span>{label}</span>
       <strong>{value}</strong>
@@ -123,19 +143,19 @@ function Stat({ icon: Icon, label, value }) {
 }
 
 function RepoRow({ repo, rank }) {
-  const topics = repo.topics?.slice(0, 4) || [];
+  const topics = repo.topics?.slice(0, 5) || [];
 
   return (
     <article className="repo-row">
-      <div className="rank">#{rank}</div>
+      <div className="rank" aria-label={`第 ${rank} 名`}>{rank}</div>
       <div className="repo-main">
         <div className="repo-heading">
           <a href={repo.url} target="_blank" rel="noreferrer">
-            <Code2 size={18} />
             <span>{repo.fullName}</span>
             <ArrowUpRight size={15} />
           </a>
           <span className="language">{repo.language || "Unknown"}</span>
+          <span className="domain">{getRepoDomain(repo)}</span>
         </div>
         <p>{repo.description || "这个仓库暂时没有描述。"}</p>
         <div className="topics">
@@ -162,9 +182,39 @@ function RepoRow({ repo, rank }) {
           <Clock3 size={15} />
           <span>{timeAgo(repo.pushedAt)}</span>
         </div>
-        {repo.coldStart ? <span className="cold-start">冷启动估算</span> : <span className="delta">+{repo.starDelta}</span>}
+        {repo.coldStart ? <span className="cold-start">估算趋势</span> : <span className="delta">+{repo.starDelta} stars</span>}
       </div>
     </article>
+  );
+}
+
+function Spotlight({ repo, windowHours }) {
+  if (!repo) return null;
+
+  return (
+    <section className="spotlight" aria-label="当前榜首项目">
+      <div className="spotlight-copy">
+        <span className="section-kicker">
+          <Radio size={16} />
+          当前榜首
+        </span>
+        <a className="spotlight-title" href={repo.url} target="_blank" rel="noreferrer">
+          {repo.fullName}
+          <ArrowUpRight size={18} />
+        </a>
+        <p>{repo.description || "这个仓库暂时没有描述。"}</p>
+        <div className="spotlight-tags">
+          <span>{repo.language || "Unknown"}</span>
+          <span>{formatWindow(windowHours)}窗口</span>
+          <span>{repo.coldStart ? "估算趋势" : "真实快照"}</span>
+        </div>
+      </div>
+      <div className="spotlight-score">
+        <span>Star velocity</span>
+        <strong>{formatVelocity(repo.starsPerHour)}</strong>
+        <small>stars / hour</small>
+      </div>
+    </section>
   );
 }
 
@@ -173,8 +223,6 @@ export default function TrendApp({ initialData = null }) {
   const [language, setLanguage] = useState("");
   const [query, setQuery] = useState("");
   const [refreshTick, setRefreshTick] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState("");
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -214,31 +262,35 @@ export default function TrendApp({ initialData = null }) {
     const visibleRepos = language ? repos.filter((repo) => repo.language?.toLowerCase() === language.toLowerCase()) : repos;
     const observed = visibleRepos.filter((repo) => !repo.coldStart).length;
     const top = visibleRepos[0];
+    const totalStars = visibleRepos.reduce((sum, repo) => sum + (repo.stars || 0), 0);
     return {
       count: visibleRepos.length,
       observed,
       topVelocity: top ? formatVelocity(top.starsPerHour) : "0",
-      topDelta: top ? `+${top.starDelta}` : "+0"
+      topDelta: top ? `+${top.starDelta}` : "+0",
+      totalStars: formatNumber(totalStars)
     };
   }, [sourceData, language]);
 
-  async function refreshNow() {
-    setRefreshing(true);
-    setRefreshError("");
-    try {
-      const response = await fetch("/api/refresh", { method: "POST" });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error || "刷新失败");
-      setRefreshTick((tick) => tick + 1);
-    } catch (error) {
-      setRefreshError("公网版本由 GitHub Actions 定时刷新；本地开发时需启动后端 API 才能手动刷新。");
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
   return (
     <>
+      <section className="signal-bar" aria-label="数据状态">
+        <div>
+          <BadgeCheck size={18} />
+          <span>只扫描 500 stars 以上仓库</span>
+        </div>
+        <div>
+          <RefreshCw size={18} />
+          <span>每 5 分钟检测静态数据更新</span>
+        </div>
+        <div>
+          <GitBranch size={18} />
+          <span>GitHub Actions 自动生成数据</span>
+        </div>
+      </section>
+
+      <Spotlight repo={items[0]} windowHours={windowHours} />
+
       <section className="toolbar" aria-label="筛选和搜索">
         <div className="search">
           <Search size={18} />
@@ -255,28 +307,31 @@ export default function TrendApp({ initialData = null }) {
             </button>
           ))}
         </div>
-        <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label="选择语言">
-          <option value="">全部语言</option>
-          {languages.map((item) => (
-            <option key={item.language} value={item.language}>
-              {item.language} ({item.count})
-            </option>
-          ))}
-        </select>
+        <label className="language-filter">
+          <Filter size={17} />
+          <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label="选择语言">
+            <option value="">全部语言</option>
+            {languages.map((item) => (
+              <option key={item.language} value={item.language}>
+                {item.language} ({item.count})
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
       <section className="stats" aria-label="趋势统计">
-        <Stat icon={Code2} label="候选项目" value={totals.count} />
-        <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} />
-        <Stat icon={Star} label="榜首增量" value={totals.topDelta} />
-        <Stat icon={Clock3} label="真实快照" value={totals.observed} />
-        <Stat icon={RefreshCw} label="数据更新" value={formatGeneratedAt(generatedAt)} />
+        <Stat icon={Code2} label="候选项目" value={totals.count} tone="tone-blue" />
+        <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} tone="tone-gold" />
+        <Stat icon={Star} label="榜首增量" value={totals.topDelta} tone="tone-green" />
+        <Stat icon={BarChart3} label="总星标量" value={totals.totalStars} tone="tone-purple" />
+        <Stat icon={Clock3} label="数据更新" value={formatGeneratedAt(generatedAt)} tone="tone-gray" />
       </section>
 
-      {(error || refreshError) && (
+      {error && (
         <div className="alert">
           <AlertCircle size={18} />
-          <span>{error || refreshError}</span>
+          <span>{error}</span>
         </div>
       )}
 

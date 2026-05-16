@@ -4,7 +4,7 @@ import "../styles.css";
 import trendData from "../../public/data/trending.json";
 
 const title = "GitHub Star Radar - 开源项目升星速度榜";
-const description = "监测 GitHub 上升星速度最快的开源项目，按星标增长速度、语言和关键词发现新趋势。";
+const description = "追踪 GitHub 上 500 stars 以上仓库的升星速度，用真实快照、语言筛选和关键词搜索发现正在加速的开源项目。";
 const canonical = "https://mazjieo.github.io/monitor-github/";
 const jsonLd = {
   "@context": "https://schema.org",
@@ -36,10 +36,10 @@ const jsonLd = {
       <section class="hero">
         <div>
           <div class="eyebrow">GitHub Star Radar</div>
-          <h1>发现升星速度最快的开源项目</h1>
-          <p>定时抓取 GitHub 候选仓库，保存星标快照，并按观察窗口内的新增星标速度排序。</p>
+          <h1>发现正在加速的开源项目</h1>
+          <p>基于 GitHub Actions 定时快照，按 6 小时、24 小时、3 天和 7 天窗口计算 star 增速，帮你更早看见开发者生态里的新信号。</p>
         </div>
-        <a class="source-link" href="https://github.com/mazjieo/monitor-github">查看源码</a>
+        <a class="source-link" href="https://github.com/mazjieo/monitor-github" target="_blank" rel="noreferrer">查看源码</a>
       </section>
 
       <noscript>
