@@ -1,6 +1,6 @@
 # GitHub Star Radar
 
-一个用于监测 GitHub 上升星速度最快项目的轻量全栈应用。
+一个用于监测 GitHub 上升星速度最快项目的 Astro + React 静态应用。
 
 ## 功能
 
@@ -10,6 +10,7 @@
 - 首次运行没有历史快照时，使用“创建以来平均星速”作为冷启动排序
 - 提供语言筛选、关键词搜索、观察窗口切换和手动刷新
 - 支持 GitHub Actions 定时刷新数据，并通过 GitHub Pages 静态展示
+- 使用 Astro 生成静态 HTML，React island 负责筛选、搜索和自动刷新
 
 ## 运行
 
@@ -21,6 +22,15 @@ npm run dev
 前端地址：`http://127.0.0.1:5173`
 
 后端地址：`http://127.0.0.1:4317`
+
+## 架构
+
+```text
+GitHub Actions -> GitHub API -> SQLite snapshots
+                          -> public/data/trending.json
+Astro build -> static HTML + React interactive island
+GitHub Pages -> public website
+```
 
 ## 配置
 

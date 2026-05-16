@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createRoot } from "react-dom/client";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -8,11 +7,9 @@ import {
   GitFork,
   RefreshCw,
   Search,
-  Sparkles,
   Star,
   Zap
 } from "lucide-react";
-import "./styles.css";
 
 const windows = [
   { label: "6h", value: 6 },
@@ -79,9 +76,14 @@ function useApi(path, deps) {
   return state;
 }
 
-function useStaticTrending(refreshTick) {
-  const staticPath = `${import.meta.env.BASE_URL}data/trending.json?t=${refreshTick}`;
-  const [state, setState] = useState({ data: null, loading: true, error: "" });
+function useStaticTrending(refreshTick, initialData) {
+  const basePath = import.meta.env.BASE_URL || "/";
+  const staticPath = `${basePath}data/trending.json?t=${refreshTick}`;
+  const [state, setState] = useState({
+    data: initialData || null,
+    loading: !initialData,
+    error: ""
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -161,7 +163,7 @@ function RepoRow({ repo, rank }) {
   );
 }
 
-function App() {
+export default function TrendApp({ initialData = null }) {
   const [windowHours, setWindowHours] = useState(24);
   const [language, setLanguage] = useState("");
   const [query, setQuery] = useState("");
@@ -178,7 +180,7 @@ function App() {
   }, []);
 
   const trendingPath = `/api/trending?windowHours=${windowHours}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
-  const staticTrending = useStaticTrending(refreshTick);
+  const staticTrending = useStaticTrending(refreshTick, initialData);
   const apiTrending = useApi(trendingPath, [windowHours, language, refreshTick]);
   const apiLanguages = useApi("/api/languages", [refreshTick]);
   const staticWindow = staticTrending.data?.windows?.[String(windowHours)];
@@ -231,25 +233,8 @@ function App() {
   }
 
   return (
-    <main>
-      <section className="hero">
-        <div>
-          <div className="eyebrow">
-            <Sparkles size={16} />
-            GitHub Star Radar
-          </div>
-          <h1>发现升星速度最快的开源项目</h1>
-          <p>
-            定时抓取 GitHub 候选仓库，保存星标快照，并按观察窗口内的新增星标速度排序。
-          </p>
-        </div>
-        <button className="refresh" onClick={refreshNow} disabled={refreshing}>
-          <RefreshCw size={18} className={refreshing ? "spin" : ""} />
-          {refreshing ? "刷新中" : "立即刷新"}
-        </button>
-      </section>
-
-      <section className="toolbar">
+    <>
+      <section className="toolbar" aria-label="筛选和搜索">
         <div className="search">
           <Search size={18} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索仓库、描述或 topic" />
@@ -275,7 +260,7 @@ function App() {
         </select>
       </section>
 
-      <section className="stats">
+      <section className="stats" aria-label="趋势统计">
         <Stat icon={Code2} label="候选项目" value={totals.count} />
         <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} />
         <Stat icon={Star} label="榜首增量" value={totals.topDelta} />
@@ -290,13 +275,11 @@ function App() {
         </div>
       )}
 
-      <section className="list">
+      <section className="list" aria-label="GitHub 升星项目列表">
         {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
         {!loading && items.map((repo, index) => <RepoRow repo={repo} rank={index + 1} key={repo.id} />)}
-        {!loading && !items.length && <div className="empty">还没有匹配的仓库。点击立即刷新获取第一批数据。</div>}
+        {!loading && !items.length && <div className="empty">还没有匹配的仓库。等待 GitHub Actions 生成第一批数据。</div>}
       </section>
-    </main>
+    </>
   );
 }
-
-createRoot(document.getElementById("root")).render(<App />);

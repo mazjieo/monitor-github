@@ -1,0 +1,52 @@
+---
+import TrendApp from "../components/TrendApp.jsx";
+import "../styles.css";
+import trendData from "../../public/data/trending.json";
+
+const title = "GitHub Star Radar - 开源项目升星速度榜";
+const description = "监测 GitHub 上升星速度最快的开源项目，按星标增长速度、语言和关键词发现新趋势。";
+const canonical = "https://mazjieo.github.io/monitor-github/";
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "GitHub Star Radar",
+  url: canonical,
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Web",
+  description
+};
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">GitHub Star Radar</div>
+          <h1>发现升星速度最快的开源项目</h1>
+          <p>定时抓取 GitHub 候选仓库，保存星标快照，并按观察窗口内的新增星标速度排序。</p>
+        </div>
+        <a class="source-link" href="https://github.com/mazjieo/monitor-github">查看源码</a>
+      </section>
+
+      <noscript>
+        <div class="alert">需要启用 JavaScript 才能使用筛选、搜索和自动刷新。</div>
+      </noscript>
+
+      <TrendApp initialData={trendData} client:load />
+    </main>
+  </body>
+</html>

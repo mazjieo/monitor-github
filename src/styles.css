@@ -76,6 +76,20 @@ h1 {
   cursor: pointer;
 }
 
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #16202d;
+  background: #16202d;
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 720;
+}
+
 .refresh:disabled {
   opacity: 0.72;
   cursor: wait;

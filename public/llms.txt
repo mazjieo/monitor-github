@@ -1,0 +1,8 @@
+# GitHub Star Radar
+
+GitHub Star Radar tracks fast-rising open source repositories on GitHub.
+
+Primary data:
+- /monitor-github/data/trending.json
+
+The project refreshes repository snapshots with GitHub Actions and ranks repositories by observed star velocity.

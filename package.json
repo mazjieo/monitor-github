@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "node server/index.js",
-    "dev:web": "vite --host 127.0.0.1",
+    "dev:web": "astro dev --host 127.0.0.1",
     "start": "node server/index.js",
-    "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1",
     "refresh": "node server/scripts/refresh.js",
     "export": "node -e \"import('./server/export-static.js').then(({ exportStaticData }) => console.log(JSON.stringify(exportStaticData(), null, 2)))\""
   },
@@ -18,7 +18,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@vitejs/plugin-react": "^6.0.2",
+    "@astrojs/react": "^5.0.5",
+    "@astrojs/sitemap": "^3.7.2",
+    "astro": "^6.3.3",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -27,8 +29,7 @@
     "node-cron": "^4.2.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.13"
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

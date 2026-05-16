@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mazjieo.github.io/monitor-github/sitemap-index.xml
