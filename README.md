@@ -5,6 +5,7 @@
 ## 功能
 
 - 定时抓取 GitHub Search API 中近期活跃且有一定星标量的仓库
+- 默认只扫描和展示 `500` stars 以上的仓库
 - 保存每个仓库的星标快照，用观察窗口内的星标增量计算 `stars/hour`
 - 首次运行没有历史快照时，使用“创建以来平均星速”作为冷启动排序
 - 提供语言筛选、关键词搜索、观察窗口切换和手动刷新
@@ -29,6 +30,7 @@ npm run dev
 GITHUB_TOKEN=ghp_xxx
 REFRESH_CRON=*/30 * * * *
 SNAPSHOT_WINDOW_HOURS=24
+MIN_STARS=500
 ```
 
 建议配置 `GITHUB_TOKEN`，未配置时 GitHub API 匿名额度较低。

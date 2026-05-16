@@ -47,7 +47,7 @@ async function githubFetch(url) {
   if (!response.ok) {
     const body = await response.text();
     if (response.status === 403 && body.includes("rate limit")) {
-      throw new Error("GitHub API 匿名额度已用完，请在 .env 中配置 GITHUB_TOKEN 后重试。");
+      throw new Error("GitHub API rate limit exceeded. Configure GITHUB_TOKEN and retry.");
     }
     throw new Error(`GitHub API ${response.status}: ${body.slice(0, 240)}`);
   }
@@ -69,9 +69,10 @@ async function searchRepositories(query, perPage = 30) {
 export async function refreshTrending() {
   const capturedAt = new Date().toISOString();
   const pushedSince = isoHoursAgo(24 * 30).slice(0, 10);
+  const starFilter = `stars:>=${config.minStars}`;
   const queries = [
-    `stars:>50 pushed:>${pushedSince}`,
-    ...config.searchLanguages.map((language) => `language:${language} stars:>50 pushed:>${pushedSince}`)
+    `${starFilter} pushed:>${pushedSince}`,
+    ...config.searchLanguages.map((language) => `language:${language} ${starFilter} pushed:>${pushedSince}`)
   ];
 
   const seen = new Set();
@@ -109,6 +110,7 @@ export async function refreshTrending() {
   return {
     capturedAt,
     candidates: repos.length,
+    minStars: config.minStars,
     rateLimit
   };
 }

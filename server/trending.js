@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { config } from "./config.js";
 
 function number(value, fallback) {
   const parsed = Number(value);
@@ -13,7 +14,7 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
   const hours = Math.min(Math.max(number(windowHours, 24), 1), 168);
   const maxRows = Math.min(Math.max(number(limit, 50), 1), 100);
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const params = { since, language: language || null, limit: maxRows };
+  const params = { since, language: language || null, limit: maxRows, minStars: config.minStars };
 
   const rows = db
     .prepare(`
@@ -43,7 +44,8 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
         on first_snapshot.repo_id = r.id and first_snapshot.captured_at = recent.first_seen
       left join star_snapshots last_snapshot
         on last_snapshot.repo_id = r.id and last_snapshot.captured_at = recent.last_seen
-      where (@language is null or lower(r.language) = lower(@language))
+      where r.stargazers_count >= @minStars
+        and (@language is null or lower(r.language) = lower(@language))
       order by r.last_seen_at desc
       limit @limit
     `)
@@ -89,6 +91,7 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
     generatedAt: new Date().toISOString(),
     windowHours: hours,
     language: language || "all",
+    minStars: config.minStars,
     items
   };
 }
@@ -99,8 +102,9 @@ export function getLanguages() {
       select language, count(*) as count
       from repositories
       where language is not null and language != ''
+        and stargazers_count >= ?
       group by language
       order by count desc, language asc
     `)
-    .all();
+    .all(config.minStars);
 }
