@@ -73,6 +73,32 @@ function useApi(path, deps) {
   return state;
 }
 
+function useStaticTrending(refreshTick) {
+  const staticPath = `${import.meta.env.BASE_URL}data/trending.json?t=${refreshTick}`;
+  const [state, setState] = useState({ data: null, loading: true, error: "" });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState((current) => ({ ...current, loading: true, error: "" }));
+
+    fetch(staticPath, { signal: controller.signal, cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("静态数据还没有生成");
+        return response.json();
+      })
+      .then((data) => setState({ data, loading: false, error: "" }))
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          setState({ data: null, loading: false, error: error.message });
+        }
+      });
+
+    return () => controller.abort();
+  }, [staticPath]);
+
+  return state;
+}
+
 function Stat({ icon: Icon, label, value }) {
   return (
     <div className="stat">
@@ -138,33 +164,41 @@ function App() {
   const [refreshError, setRefreshError] = useState("");
 
   const trendingPath = `/api/trending?windowHours=${windowHours}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
-  const { data, loading, error } = useApi(trendingPath, [windowHours, language, refreshTick]);
-  const languages = useApi("/api/languages", [refreshTick]);
+  const staticTrending = useStaticTrending(refreshTick);
+  const apiTrending = useApi(trendingPath, [windowHours, language, refreshTick]);
+  const apiLanguages = useApi("/api/languages", [refreshTick]);
+  const staticWindow = staticTrending.data?.windows?.[String(windowHours)];
+  const sourceData = staticWindow || apiTrending.data;
+  const loading = staticTrending.loading && apiTrending.loading;
+  const error = staticTrending.error && apiTrending.error ? staticTrending.error : "";
+  const languages = staticTrending.data?.languages || apiLanguages.data?.items || [];
 
   const items = useMemo(() => {
-    const repos = data?.items || [];
-    if (!query.trim()) return repos;
+    const repos = sourceData?.items || [];
+    const byLanguage = language ? repos.filter((repo) => repo.language?.toLowerCase() === language.toLowerCase()) : repos;
+    if (!query.trim()) return byLanguage;
     const needle = query.trim().toLowerCase();
-    return repos.filter((repo) => {
+    return byLanguage.filter((repo) => {
       return (
         repo.fullName.toLowerCase().includes(needle) ||
         (repo.description || "").toLowerCase().includes(needle) ||
         (repo.topics || []).some((topic) => topic.toLowerCase().includes(needle))
       );
     });
-  }, [data, query]);
+  }, [sourceData, language, query]);
 
   const totals = useMemo(() => {
-    const repos = data?.items || [];
-    const observed = repos.filter((repo) => !repo.coldStart).length;
-    const top = repos[0];
+    const repos = sourceData?.items || [];
+    const visibleRepos = language ? repos.filter((repo) => repo.language?.toLowerCase() === language.toLowerCase()) : repos;
+    const observed = visibleRepos.filter((repo) => !repo.coldStart).length;
+    const top = visibleRepos[0];
     return {
-      count: repos.length,
+      count: visibleRepos.length,
       observed,
       topVelocity: top ? formatVelocity(top.starsPerHour) : "0",
       topDelta: top ? `+${top.starDelta}` : "+0"
     };
-  }, [data]);
+  }, [sourceData, language]);
 
   async function refreshNow() {
     setRefreshing(true);
@@ -175,7 +209,7 @@ function App() {
       if (!response.ok || !result.ok) throw new Error(result.error || "刷新失败");
       setRefreshTick((tick) => tick + 1);
     } catch (error) {
-      setRefreshError(error.message);
+      setRefreshError("公网版本由 GitHub Actions 定时刷新；本地开发时需启动后端 API 才能手动刷新。");
     } finally {
       setRefreshing(false);
     }
@@ -218,7 +252,7 @@ function App() {
         </div>
         <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label="选择语言">
           <option value="">全部语言</option>
-          {(languages.data?.items || []).map((item) => (
+          {languages.map((item) => (
             <option key={item.language} value={item.language}>
               {item.language} ({item.count})
             </option>

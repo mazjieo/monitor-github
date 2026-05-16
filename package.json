@@ -11,7 +11,8 @@
     "start": "node server/index.js",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "refresh": "node server/scripts/refresh.js"
+    "refresh": "node server/scripts/refresh.js",
+    "export": "node -e \"import('./server/export-static.js').then(({ exportStaticData }) => console.log(JSON.stringify(exportStaticData(), null, 2)))\""
   },
   "keywords": [],
   "author": "",
