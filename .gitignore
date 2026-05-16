@@ -1,6 +1,10 @@
 node_modules/
 dist/
-data/
+data/*
+!data/
+!data/github-trends.sqlite
+*.sqlite-shm
+*.sqlite-wal
 .env
 .idea/
 .DS_Store
