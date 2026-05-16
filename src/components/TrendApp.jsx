@@ -78,7 +78,8 @@ function useApi(path, deps) {
 
 function useStaticTrending(refreshTick, initialData) {
   const basePath = import.meta.env.BASE_URL || "/";
-  const staticPath = `${basePath}data/trending.json?t=${refreshTick}`;
+  const normalizedBasePath = basePath.endsWith("/") ? basePath : `${basePath}/`;
+  const staticPath = `${normalizedBasePath}data/trending.json?t=${refreshTick}`;
   const [state, setState] = useState({
     data: initialData || null,
     loading: !initialData,
@@ -97,7 +98,11 @@ function useStaticTrending(refreshTick, initialData) {
       .then((data) => setState({ data, loading: false, error: "" }))
       .catch((error) => {
         if (error.name !== "AbortError") {
-          setState({ data: null, loading: false, error: error.message });
+          setState((current) => ({
+            data: current.data,
+            loading: false,
+            error: current.data ? "" : error.message
+          }));
         }
       });
 
