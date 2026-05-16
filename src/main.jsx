@@ -20,6 +20,7 @@ const windows = [
   { label: "3d", value: 72 },
   { label: "7d", value: 168 }
 ];
+const autoRefreshMs = 5 * 60 * 1000;
 
 const numberFmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 const dateFmt = new Intl.DateTimeFormat("zh-CN", {
@@ -46,6 +47,11 @@ function timeAgo(value) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
   return dateFmt.format(new Date(value));
+}
+
+function formatGeneratedAt(value) {
+  if (!value) return "等待生成";
+  return timeAgo(value);
 }
 
 function useApi(path, deps) {
@@ -163,6 +169,14 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRefreshTick((tick) => tick + 1);
+    }, autoRefreshMs);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
   const trendingPath = `/api/trending?windowHours=${windowHours}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
   const staticTrending = useStaticTrending(refreshTick);
   const apiTrending = useApi(trendingPath, [windowHours, language, refreshTick]);
@@ -172,6 +186,7 @@ function App() {
   const loading = staticTrending.loading && apiTrending.loading;
   const error = staticTrending.error && apiTrending.error ? staticTrending.error : "";
   const languages = staticTrending.data?.languages || apiLanguages.data?.items || [];
+  const generatedAt = staticTrending.data?.generatedAt || sourceData?.generatedAt;
 
   const items = useMemo(() => {
     const repos = sourceData?.items || [];
@@ -265,6 +280,7 @@ function App() {
         <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} />
         <Stat icon={Star} label="榜首增量" value={totals.topDelta} />
         <Stat icon={Clock3} label="真实快照" value={totals.observed} />
+        <Stat icon={RefreshCw} label="数据更新" value={formatGeneratedAt(generatedAt)} />
       </section>
 
       {(error || refreshError) && (
