@@ -12,6 +12,8 @@ import {
   Radio,
   RefreshCw,
   Search,
+  ShieldCheck,
+  Sparkles,
   Star,
   Zap
 } from "lucide-react";
@@ -44,10 +46,6 @@ function formatVelocity(value) {
 
 function timeAgo(value) {
   if (!value) return "暂无";
-  const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
-  if (seconds < 60) return "刚刚";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
   return dateFmt.format(new Date(value));
 }
 
@@ -68,7 +66,8 @@ function getRepoDomain(repo) {
   if (text.includes("database") || text.includes("sql") || text.includes("vector")) return "Data";
   if (text.includes("ui") || text.includes("react") || text.includes("frontend")) return "Frontend";
   if (text.includes("devops") || text.includes("kubernetes") || text.includes("docker")) return "Infra";
-  return repo.language || "Open Source";
+  if (text.includes("security") || text.includes("auth") || text.includes("identity")) return "Security";
+  return "Open Source";
 }
 
 function useApi(path, deps) {
@@ -132,22 +131,30 @@ function useStaticTrending(refreshTick, initialData) {
   return state;
 }
 
-function Stat({ icon: Icon, label, value, tone = "" }) {
+function Stat({ icon: Icon, label, value, hint, tone = "" }) {
   return (
     <div className={`stat ${tone}`}>
-      <Icon size={17} />
+      <div className="stat-icon">
+        <Icon size={18} />
+      </div>
       <span>{label}</span>
       <strong>{value}</strong>
+      {hint && <small>{hint}</small>}
     </div>
   );
 }
 
 function RepoRow({ repo, rank }) {
-  const topics = repo.topics?.slice(0, 5) || [];
+  const topics = repo.topics?.slice(0, 4) || [];
+  const domain = getRepoDomain(repo);
 
   return (
     <article className="repo-row">
-      <div className="rank" aria-label={`第 ${rank} 名`}>{rank}</div>
+      <div className="rank-block">
+        <span className="rank-number">{String(rank).padStart(2, "0")}</span>
+        <span className="rank-label">rank</span>
+      </div>
+
       <div className="repo-main">
         <div className="repo-heading">
           <a href={repo.url} target="_blank" rel="noreferrer">
@@ -155,7 +162,7 @@ function RepoRow({ repo, rank }) {
             <ArrowUpRight size={15} />
           </a>
           <span className="language">{repo.language || "Unknown"}</span>
-          <span className="domain">{getRepoDomain(repo)}</span>
+          {domain !== "Open Source" && domain !== repo.language && <span className="domain">{domain}</span>}
         </div>
         <p>{repo.description || "这个仓库暂时没有描述。"}</p>
         <div className="topics">
@@ -164,12 +171,14 @@ function RepoRow({ repo, rank }) {
           ))}
         </div>
       </div>
+
+      <div className="repo-score">
+        <span>velocity</span>
+        <strong>{formatVelocity(repo.starsPerHour)}</strong>
+        <small>stars / hour</small>
+      </div>
+
       <div className="repo-metrics">
-        <div className="velocity">
-          <Zap size={18} />
-          <strong>{formatVelocity(repo.starsPerHour)}</strong>
-          <span>stars/h</span>
-        </div>
         <div className="metric-line">
           <Star size={15} />
           <span>{formatNumber(repo.stars)}</span>
@@ -218,6 +227,79 @@ function Spotlight({ repo, windowHours }) {
   );
 }
 
+function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
+  const topLanguages = languages.slice(0, 8);
+  const hotTopics = useMemo(() => {
+    const counts = new Map();
+    items.forEach((repo) => {
+      (repo.topics || []).forEach((topic) => {
+        counts.set(topic, (counts.get(topic) || 0) + 1);
+      });
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+  }, [items]);
+
+  return (
+    <aside className="insights" aria-label="趋势洞察">
+      <section className="insight-panel">
+        <div className="panel-title">
+          <Sparkles size={17} />
+          <h2>趋势切片</h2>
+        </div>
+        <div className="signal-list">
+          <div>
+            <strong>{sourceData?.minStars || refresh?.minStars || 500}+</strong>
+            <span>最低星标门槛</span>
+          </div>
+          <div>
+            <strong>{refresh?.candidates || items.length}</strong>
+            <span>候选仓库</span>
+          </div>
+          <div>
+            <strong>{formatGeneratedAt(generatedAt)}</strong>
+            <span>最近生成</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="insight-panel">
+        <div className="panel-title">
+          <Code2 size={17} />
+          <h2>语言热度</h2>
+        </div>
+        <div className="language-rank">
+          {topLanguages.map((item) => (
+            <div key={item.language}>
+              <span>{item.language}</span>
+              <div>
+                <i style={{ width: `${Math.max(10, Math.min(100, item.count * 3))}%` }} />
+              </div>
+              <strong>{item.count}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="insight-panel">
+        <div className="panel-title">
+          <BarChart3 size={17} />
+          <h2>高频 Topic</h2>
+        </div>
+        <div className="topic-cloud">
+          {hotTopics.map(([topic, count]) => (
+            <span key={topic}>
+              {topic}
+              <b>{count}</b>
+            </span>
+          ))}
+        </div>
+      </section>
+    </aside>
+  );
+}
+
 export default function TrendApp({ initialData = null }) {
   const [windowHours, setWindowHours] = useState(24);
   const [language, setLanguage] = useState("");
@@ -242,6 +324,7 @@ export default function TrendApp({ initialData = null }) {
   const error = staticTrending.error && apiTrending.error ? staticTrending.error : "";
   const languages = staticTrending.data?.languages || apiLanguages.data?.items || [];
   const generatedAt = staticTrending.data?.generatedAt || sourceData?.generatedAt;
+  const refresh = staticTrending.data?.refresh;
 
   const items = useMemo(() => {
     const repos = sourceData?.items || [];
@@ -291,12 +374,20 @@ export default function TrendApp({ initialData = null }) {
 
       <Spotlight repo={items[0]} windowHours={windowHours} />
 
+      <section className="stats" aria-label="趋势统计">
+        <Stat icon={Code2} label="候选项目" value={totals.count} hint={`${totals.observed} 个真实快照`} tone="tone-blue" />
+        <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} hint={formatWindow(windowHours)} tone="tone-gold" />
+        <Stat icon={Star} label="榜首增量" value={totals.topDelta} hint="窗口内新增" tone="tone-green" />
+        <Stat icon={BarChart3} label="总星标量" value={totals.totalStars} hint="当前筛选合集" tone="tone-purple" />
+        <Stat icon={ShieldCheck} label="数据更新" value={formatGeneratedAt(generatedAt)} hint="静态快照" tone="tone-gray" />
+      </section>
+
       <section className="toolbar" aria-label="筛选和搜索">
         <div className="search">
           <Search size={18} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索仓库、描述或 topic" />
         </div>
-        <div className="segments">
+        <div className="segments" role="group" aria-label="选择时间窗口">
           {windows.map((item) => (
             <button
               key={item.value}
@@ -320,14 +411,6 @@ export default function TrendApp({ initialData = null }) {
         </label>
       </section>
 
-      <section className="stats" aria-label="趋势统计">
-        <Stat icon={Code2} label="候选项目" value={totals.count} tone="tone-blue" />
-        <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} tone="tone-gold" />
-        <Stat icon={Star} label="榜首增量" value={totals.topDelta} tone="tone-green" />
-        <Stat icon={BarChart3} label="总星标量" value={totals.totalStars} tone="tone-purple" />
-        <Stat icon={Clock3} label="数据更新" value={formatGeneratedAt(generatedAt)} tone="tone-gray" />
-      </section>
-
       {error && (
         <div className="alert">
           <AlertCircle size={18} />
@@ -335,11 +418,24 @@ export default function TrendApp({ initialData = null }) {
         </div>
       )}
 
-      <section className="list" aria-label="GitHub 升星项目列表">
-        {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
-        {!loading && items.map((repo, index) => <RepoRow repo={repo} rank={index + 1} key={repo.id} />)}
-        {!loading && !items.length && <div className="empty">还没有匹配的仓库。等待 GitHub Actions 生成第一批数据。</div>}
-      </section>
+      <div className="workspace">
+        <section className="list-shell" aria-label="GitHub 升星项目列表">
+          <div className="list-header">
+            <div>
+              <span>Trending Repositories</span>
+              <h2>正在加速的开源项目</h2>
+            </div>
+            <strong>{items.length} repos</strong>
+          </div>
+          <div className="list">
+            {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
+            {!loading && items.map((repo, index) => <RepoRow repo={repo} rank={index + 1} key={repo.id} />)}
+            {!loading && !items.length && <div className="empty">还没有匹配的仓库。换个时间窗口或语言试试。</div>}
+          </div>
+        </section>
+
+        <InsightsPanel items={items} languages={languages} generatedAt={generatedAt} sourceData={sourceData} refresh={refresh} />
+      </div>
     </>
   );
 }
