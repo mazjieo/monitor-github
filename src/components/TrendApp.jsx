@@ -145,6 +145,31 @@ function Stat({ icon: Icon, label, value, hint, tone = "" }) {
   );
 }
 
+function StarSparkline({ points = [] }) {
+  const width = 164;
+  const height = 44;
+  const padding = 3;
+  const values = points.map((point) => point.stars).filter((value) => Number.isFinite(value));
+  const min = values.length ? Math.min(...values) : 0;
+  const max = values.length ? Math.max(...values) : 0;
+  const spread = Math.max(1, max - min);
+  const coords = values.map((value, index) => {
+    const x = values.length === 1 ? width - padding : padding + (index / (values.length - 1)) * (width - padding * 2);
+    const y = height - padding - ((value - min) / spread) * (height - padding * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const flatLine = `${padding},${height - padding} ${width - padding},${height - padding}`;
+  const path = coords.length > 1 ? coords.join(" ") : flatLine;
+
+  return (
+    <svg className="sparkline" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Star trend">
+      <polyline className="sparkline-base" points={flatLine} />
+      <polyline className="sparkline-line" points={path} />
+      {coords.length > 0 && <circle className="sparkline-dot" r="3" cx={coords[coords.length - 1].split(",")[0]} cy={coords[coords.length - 1].split(",")[1]} />}
+    </svg>
+  );
+}
+
 function RepoRow({ repo, rank }) {
   const topics = repo.topics?.slice(0, 4) || [];
   const domain = getRepoDomain(repo);
@@ -174,9 +199,12 @@ function RepoRow({ repo, rank }) {
       </div>
 
       <div className="repo-score">
-        <span>velocity</span>
-        <strong>{formatVelocity(repo.starsPerHour)}</strong>
-        <small>stars / hour</small>
+        <div>
+          <span>velocity</span>
+          <strong>{formatVelocity(repo.starsPerHour)}</strong>
+          <small>stars / hour</small>
+        </div>
+        <StarSparkline points={repo.starHistory || []} />
       </div>
 
       <div className="repo-metrics">

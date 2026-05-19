@@ -431,7 +431,7 @@ select {
 
 .repo-row {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 116px 150px;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(170px, 190px) 150px;
   gap: 16px;
   align-items: center;
   padding: 18px;
@@ -547,6 +547,7 @@ select {
 
 .repo-score {
   display: grid;
+  gap: 8px;
   align-content: center;
   min-height: 82px;
   padding: 12px;
@@ -554,6 +555,36 @@ select {
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 8px;
+}
+
+.sparkline {
+  width: 100%;
+  height: 44px;
+  display: block;
+  overflow: visible;
+}
+
+.sparkline-base,
+.sparkline-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline-base {
+  stroke: rgba(146, 64, 14, 0.18);
+  stroke-width: 2;
+}
+
+.sparkline-line {
+  stroke: #d97706;
+  stroke-width: 3;
+}
+
+.sparkline-dot {
+  fill: #111827;
+  stroke: #fff7ed;
+  stroke-width: 2;
 }
 
 .repo-score span,
@@ -779,7 +810,7 @@ select {
   }
 
   .repo-row {
-    grid-template-columns: 64px minmax(0, 1fr) 116px;
+    grid-template-columns: 64px minmax(0, 1fr) minmax(170px, 190px);
   }
 
   .repo-metrics {

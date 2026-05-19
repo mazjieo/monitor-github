@@ -10,6 +10,17 @@ function hoursBetween(a, b) {
   return Math.max(0, (new Date(b).getTime() - new Date(a).getTime()) / 36e5);
 }
 
+function getStarHistory(repoId, since) {
+  return db
+    .prepare(`
+      select stargazers_count as stars, captured_at as capturedAt
+      from star_snapshots
+      where repo_id = ? and captured_at >= ?
+      order by captured_at asc
+    `)
+    .all(repoId, since);
+}
+
 export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}) {
   const hours = Math.min(Math.max(number(windowHours, 24), 1), 168);
   const maxRows = Math.min(Math.max(number(limit, 50), 1), 100);
@@ -78,6 +89,7 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
       firstSeen: row.first_seen,
       lastSeen: row.last_seen,
       snapshotCount: row.snapshot_count || 0,
+      starHistory: getStarHistory(row.id, since),
       starDelta,
       observedHours,
       starsPerHour: velocity,
