@@ -10,6 +10,18 @@ function hoursBetween(a, b) {
   return Math.max(0, (new Date(b).getTime() - new Date(a).getTime()) / 36e5);
 }
 
+function trendScore({ starDelta, observedStarsPerHour, stars, pushedAt, snapshotCount, coldStart, now }) {
+  const pushedAgeHours = hoursBetween(pushedAt, now);
+  const growthScore = Math.log1p(starDelta) * 45;
+  const velocityScore = Math.log1p(observedStarsPerHour) * 35;
+  const baseScore = Math.log10(Math.max(1, stars)) * 6;
+  const activityScore = Math.max(0, 20 - pushedAgeHours / 12);
+  const confidenceScore = Math.min(snapshotCount, 6) * 2;
+  const coldStartPenalty = coldStart ? 60 : 0;
+
+  return Math.max(0, growthScore + velocityScore + baseScore + activityScore + confidenceScore - coldStartPenalty);
+}
+
 function getStarHistory(repoId, since) {
   return db
     .prepare(`
@@ -24,6 +36,7 @@ function getStarHistory(repoId, since) {
 export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}) {
   const hours = Math.min(Math.max(number(windowHours, 24), 1), 168);
   const maxRows = Math.min(Math.max(number(limit, 50), 1), 100);
+  const now = new Date().toISOString();
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const params = { since, language: language || null, limit: maxRows, minStars: config.minStars };
 
@@ -69,6 +82,7 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
     const observedStarsPerHour = observedHours > 0 ? starDelta / observedHours : 0;
     const coldStartStarsPerHour = row.stargazers_count / createdHours;
     const velocity = observedHours > 0 ? observedStarsPerHour : coldStartStarsPerHour;
+    const coldStart = observedHours === 0;
 
     return {
       id: row.id,
@@ -93,11 +107,21 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
       starDelta,
       observedHours,
       starsPerHour: velocity,
-      coldStart: observedHours === 0
+      observedStarsPerHour,
+      trendScore: trendScore({
+        starDelta,
+        observedStarsPerHour,
+        stars: row.stargazers_count,
+        pushedAt: row.pushed_at,
+        snapshotCount: row.snapshot_count || 0,
+        coldStart,
+        now
+      }),
+      coldStart
     };
   });
 
-  items.sort((a, b) => b.starsPerHour - a.starsPerHour || b.starDelta - a.starDelta || b.stars - a.stars);
+  items.sort((a, b) => b.trendScore - a.trendScore || b.starDelta - a.starDelta || b.starsPerHour - a.starsPerHour || b.stars - a.stars);
 
   return {
     generatedAt: new Date().toISOString(),

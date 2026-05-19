@@ -400,7 +400,7 @@ export default function TrendApp({ initialData = null }) {
       <section className="signal-bar" aria-label="数据状态">
         <div>
           <BadgeCheck size={18} />
-          <span>只扫描 500 stars 以上仓库</span>
+          <span>多策略候选池，50+ stars 起采样</span>
         </div>
         <div>
           <RefreshCw size={18} />

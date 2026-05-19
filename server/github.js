@@ -7,6 +7,10 @@ function isoHoursAgo(hours) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
+function isoDaysAgo(days) {
+  return isoHoursAgo(days * 24).slice(0, 10);
+}
+
 function repoFromGitHub(item, capturedAt) {
   return {
     id: item.id,
@@ -55,39 +59,97 @@ async function githubFetch(url) {
   return { data: await response.json(), rateLimit };
 }
 
-async function searchRepositories(query, perPage = 30) {
+async function searchRepositories(query, { perPage = 30, sort = "stars", pool = "unknown" } = {}) {
   const url = new URL(`${GITHUB_API}/search/repositories`);
   url.searchParams.set("q", query);
-  url.searchParams.set("sort", "stars");
+  url.searchParams.set("sort", sort);
   url.searchParams.set("order", "desc");
   url.searchParams.set("per_page", String(perPage));
 
   const { data, rateLimit } = await githubFetch(url);
-  return { items: data.items || [], rateLimit };
+  return { items: data.items || [], rateLimit, pool, totalCount: data.total_count || 0 };
+}
+
+function buildCandidateQueries() {
+  const recentSince = isoDaysAgo(config.recentWindowDays);
+  const activeSince = isoDaysAgo(config.activeWindowDays);
+  const baselineStars = `stars:>=${config.baselineMinStars}`;
+  const discoveryStars = `stars:>=${config.discoveryMinStars}`;
+  const queries = [
+    {
+      pool: "baseline-stars",
+      query: `${baselineStars} pushed:>${recentSince}`,
+      sort: "stars",
+      perPage: 40
+    },
+    {
+      pool: "recent-created",
+      query: `${discoveryStars} created:>${recentSince}`,
+      sort: "stars",
+      perPage: 40
+    },
+    {
+      pool: "recent-active",
+      query: `${discoveryStars} pushed:>${activeSince}`,
+      sort: "updated",
+      perPage: 40
+    },
+    ...config.searchLanguages.map((language) => ({
+      pool: `language:${language}`,
+      query: `language:${language} ${discoveryStars} pushed:>${activeSince}`,
+      sort: "updated",
+      perPage: 25
+    })),
+    ...config.searchTopics.flatMap((topic) => [
+      {
+        pool: `topic:${topic}`,
+        query: `topic:${topic} ${discoveryStars} pushed:>${recentSince}`,
+        sort: "updated",
+        perPage: 25
+      },
+      {
+        pool: `keyword:${topic}`,
+        query: `${topic} in:name,description,readme ${discoveryStars} pushed:>${recentSince}`,
+        sort: "updated",
+        perPage: 20
+      }
+    ])
+  ];
+
+  return queries;
 }
 
 export async function refreshTrending() {
   const capturedAt = new Date().toISOString();
-  const pushedSince = isoHoursAgo(24 * 30).slice(0, 10);
-  const starFilter = `stars:>=${config.minStars}`;
-  const queries = [
-    `${starFilter} pushed:>${pushedSince}`,
-    ...config.searchLanguages.map((language) => `language:${language} ${starFilter} pushed:>${pushedSince}`)
-  ];
+  const queries = buildCandidateQueries();
 
   const seen = new Set();
+  const poolStats = [];
   const repos = [];
   let rateLimit = null;
 
-  for (const query of queries) {
-    const result = await searchRepositories(query);
+  for (const candidate of queries) {
+    const result = await searchRepositories(candidate.query, candidate);
     rateLimit = result.rateLimit;
+    let added = 0;
 
     for (const item of result.items) {
-      if (seen.has(item.id)) continue;
+      if (seen.has(item.id)) {
+        continue;
+      }
       seen.add(item.id);
       repos.push(item);
+      added += 1;
     }
+
+    poolStats.push({
+      pool: candidate.pool,
+      query: candidate.query,
+      sort: candidate.sort,
+      returned: result.items.length,
+      added,
+      totalCount: result.totalCount
+    });
   }
 
   const write = db.transaction((items) => {
@@ -110,7 +172,9 @@ export async function refreshTrending() {
   return {
     capturedAt,
     candidates: repos.length,
-    minStars: config.minStars,
+    baselineMinStars: config.baselineMinStars,
+    discoveryMinStars: config.discoveryMinStars,
+    pools: poolStats,
     rateLimit
   };
 }
