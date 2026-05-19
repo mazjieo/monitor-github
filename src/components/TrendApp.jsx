@@ -24,6 +24,7 @@ const windows = [
   { label: "3d", value: 72 },
   { label: "7d", value: 168 }
 ];
+const pageSize = 10;
 const autoRefreshMs = 5 * 60 * 1000;
 
 const numberFmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
@@ -304,6 +305,7 @@ export default function TrendApp({ initialData = null }) {
   const [windowHours, setWindowHours] = useState(24);
   const [language, setLanguage] = useState("");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
@@ -339,6 +341,16 @@ export default function TrendApp({ initialData = null }) {
       );
     });
   }, [sourceData, language, query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [windowHours, language, query]);
+
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = items.length ? (currentPage - 1) * pageSize : 0;
+  const pageEnd = Math.min(pageStart + pageSize, items.length);
+  const pageItems = items.slice(pageStart, pageEnd);
 
   const totals = useMemo(() => {
     const repos = sourceData?.items || [];
@@ -425,13 +437,26 @@ export default function TrendApp({ initialData = null }) {
               <span>Trending Repositories</span>
               <h2>正在加速的开源项目</h2>
             </div>
-            <strong>{items.length} repos</strong>
+            <strong>{items.length ? `${pageStart + 1}-${pageEnd} / ${items.length}` : "0 repos"}</strong>
           </div>
           <div className="list">
             {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
-            {!loading && items.map((repo, index) => <RepoRow repo={repo} rank={index + 1} key={repo.id} />)}
+            {!loading && pageItems.map((repo, index) => <RepoRow repo={repo} rank={pageStart + index + 1} key={repo.id} />)}
             {!loading && !items.length && <div className="empty">还没有匹配的仓库。换个时间窗口或语言试试。</div>}
           </div>
+          {!loading && items.length > pageSize && (
+            <nav className="pagination" aria-label="Repository pagination">
+              <button disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                Prev
+              </button>
+              <span>
+                Page {currentPage} / {pageCount}
+              </span>
+              <button disabled={currentPage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>
+                Next
+              </button>
+            </nav>
+          )}
         </section>
 
         <InsightsPanel items={items} languages={languages} generatedAt={generatedAt} sourceData={sourceData} refresh={refresh} />
