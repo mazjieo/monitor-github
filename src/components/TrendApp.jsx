@@ -173,6 +173,7 @@ function StarSparkline({ points = [] }) {
 function RepoRow({ repo, rank }) {
   const topics = repo.topics?.slice(0, 4) || [];
   const domain = getRepoDomain(repo);
+  const latestSnapshot = repo.lastSeen || repo.starHistory?.[repo.starHistory.length - 1]?.capturedAt;
 
   return (
     <article className="repo-row">
@@ -218,7 +219,17 @@ function RepoRow({ repo, rank }) {
         </div>
         <div className="metric-line">
           <Clock3 size={15} />
-          <span>{timeAgo(repo.pushedAt)}</span>
+          <span className="metric-copy">
+            <small>最后 push</small>
+            <b>{timeAgo(repo.pushedAt)}</b>
+          </span>
+        </div>
+        <div className="metric-line">
+          <ShieldCheck size={15} />
+          <span className="metric-copy">
+            <small>快照</small>
+            <b>{timeAgo(latestSnapshot)}</b>
+          </span>
         </div>
         {repo.coldStart ? <span className="cold-start">估算趋势</span> : <span className="delta">+{repo.starDelta} stars</span>}
       </div>

@@ -615,7 +615,27 @@ select {
 }
 
 .metric-line svg {
+  flex: 0 0 auto;
   color: var(--faint);
+}
+
+.metric-copy {
+  display: grid;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.metric-copy small {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.metric-copy b {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 760;
+  white-space: nowrap;
 }
 
 .cold-start,
@@ -815,7 +835,7 @@ select {
 
   .repo-metrics {
     grid-column: 2 / -1;
-    grid-template-columns: repeat(4, max-content);
+    grid-template-columns: repeat(5, max-content);
   }
 }
 
