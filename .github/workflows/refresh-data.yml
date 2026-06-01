@@ -34,8 +34,8 @@ jobs:
         run: npm run refresh
         env:
           GITHUB_TOKEN: ${{ secrets.MONITOR_GITHUB_TOKEN }}
-          BASELINE_MIN_STARS: 500
-          DISCOVERY_MIN_STARS: 50
+          BASELINE_MIN_STARS: 1000
+          DISCOVERY_MIN_STARS: 1000
 
       - name: Commit data changes
         run: |

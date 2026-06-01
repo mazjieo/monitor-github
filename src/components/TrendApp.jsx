@@ -317,7 +317,7 @@ function RepoRow({ repo, rank, onOpen }) {
   );
 }
 
-function RepoDetailModal({ repo, windowHours, onClose }) {
+function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose }) {
   if (!repo) return null;
 
   const history = [...(repo.starHistory || [])].sort((a, b) => new Date(a.capturedAt) - new Date(b.capturedAt));
@@ -366,6 +366,10 @@ function RepoDetailModal({ repo, windowHours, onClose }) {
             <span>当前 stars</span>
             <strong>{formatFullNumber(repo.stars)}</strong>
           </div>
+          <div>
+            <span>数据源</span>
+            <strong>{sourceLabel}</strong>
+          </div>
         </div>
 
         <div className="detail-chart-panel">
@@ -389,6 +393,7 @@ function RepoDetailModal({ repo, windowHours, onClose }) {
               <div><span>快照</span><strong>{timeAgo(latestSnapshot)}</strong></div>
               <div><span>Forks</span><strong>{formatNumber(repo.forks)}</strong></div>
               <div><span>Issues</span><strong>{formatNumber(repo.openIssues)}</strong></div>
+              <div><span>数据生成</span><strong>{formatGeneratedAt(generatedAt)}</strong></div>
             </div>
           </section>
           <section>
@@ -478,7 +483,7 @@ function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
         </div>
         <div className="signal-list">
           <div>
-            <strong>{sourceData?.minStars || refresh?.minStars || 500}+</strong>
+            <strong>{sourceData?.minStars || refresh?.minStars || 1000}+</strong>
             <span>最低星标门槛</span>
           </div>
           <div>
@@ -549,11 +554,13 @@ export default function TrendApp({ initialData = null }) {
   const apiTrending = useApi(trendingPath, [windowHours, language, refreshTick]);
   const apiLanguages = useApi("/api/languages", [refreshTick]);
   const staticWindow = staticTrending.data?.windows?.[String(windowHours)];
-  const sourceData = staticWindow || apiTrending.data;
+  const apiWindow = apiTrending.data || null;
+  const sourceData = apiWindow || staticWindow || apiTrending.data;
+  const sourceLabel = apiWindow ? "实时 API" : "静态快照";
   const loading = staticTrending.loading && apiTrending.loading;
   const error = staticTrending.error && apiTrending.error ? staticTrending.error : "";
-  const languages = staticTrending.data?.languages || apiLanguages.data?.items || [];
-  const generatedAt = staticTrending.data?.generatedAt || sourceData?.generatedAt;
+  const languages = apiLanguages.data?.items || staticTrending.data?.languages || [];
+  const generatedAt = sourceData?.generatedAt || staticTrending.data?.generatedAt;
   const refresh = staticTrending.data?.refresh;
 
   const items = useMemo(() => {
@@ -611,7 +618,7 @@ export default function TrendApp({ initialData = null }) {
       <section className="signal-bar" aria-label="数据状态">
         <div>
           <BadgeCheck size={18} />
-          <span>多策略候选池，50+ stars 起采样</span>
+          <span>多策略候选池，1000+ stars 起采样</span>
         </div>
         <div>
           <RefreshCw size={18} />
@@ -701,7 +708,7 @@ export default function TrendApp({ initialData = null }) {
         <InsightsPanel items={items} languages={languages} generatedAt={generatedAt} sourceData={sourceData} refresh={refresh} />
       </div>
 
-      <RepoDetailModal repo={selectedRepo} windowHours={windowHours} onClose={() => setSelectedRepo(null)} />
+      <RepoDetailModal repo={selectedRepo} windowHours={windowHours} generatedAt={generatedAt} sourceLabel={sourceLabel} onClose={() => setSelectedRepo(null)} />
     </>
   );
 }
