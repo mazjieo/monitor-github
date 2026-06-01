@@ -547,9 +547,9 @@ select {
 
 .repo-score {
   display: grid;
-  gap: 8px;
+  gap: 9px;
   align-content: center;
-  min-height: 82px;
+  min-height: 142px;
   padding: 12px;
   color: #78350f;
   background: #fffbeb;
@@ -557,34 +557,57 @@ select {
   border-radius: 8px;
 }
 
-.sparkline {
+.time-chart {
   width: 100%;
-  height: 44px;
+  height: 88px;
   display: block;
   overflow: visible;
 }
 
-.sparkline-base,
-.sparkline-line {
+.chart-axis,
+.chart-grid,
+.time-chart-line {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.sparkline-base {
-  stroke: rgba(146, 64, 14, 0.18);
-  stroke-width: 2;
+.chart-axis {
+  stroke: rgba(120, 53, 15, 0.42);
+  stroke-width: 1.2;
 }
 
-.sparkline-line {
-  stroke: #d97706;
-  stroke-width: 3;
+.chart-grid {
+  stroke: rgba(146, 64, 14, 0.14);
+  stroke-width: 1;
 }
 
-.sparkline-dot {
+.time-chart-line {
+  stroke: #b45309;
+  stroke-width: 2.2;
+}
+
+.time-chart-dot {
   fill: #111827;
   stroke: #fff7ed;
-  stroke-width: 2;
+  stroke-width: 1.5;
+}
+
+.chart-label,
+.chart-unit,
+.chart-empty {
+  fill: #92400e;
+  font-size: 9px;
+}
+
+.chart-unit {
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.chart-empty {
+  text-anchor: middle;
+  opacity: 0.68;
 }
 
 .repo-score span,

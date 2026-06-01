@@ -34,6 +34,11 @@ const dateFmt = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit"
 });
+const chartTimeFmt = new Intl.DateTimeFormat("zh-CN", {
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit"
+});
 
 function formatNumber(value) {
   return numberFmt.format(value || 0);
@@ -145,27 +150,84 @@ function Stat({ icon: Icon, label, value, hint, tone = "" }) {
   );
 }
 
-function StarSparkline({ points = [] }) {
-  const width = 164;
-  const height = 44;
-  const padding = 3;
-  const values = points.map((point) => point.stars).filter((value) => Number.isFinite(value));
-  const min = values.length ? Math.min(...values) : 0;
-  const max = values.length ? Math.max(...values) : 0;
-  const spread = Math.max(1, max - min);
-  const coords = values.map((value, index) => {
-    const x = values.length === 1 ? width - padding : padding + (index / (values.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((value - min) / spread) * (height - padding * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const flatLine = `${padding},${height - padding} ${width - padding},${height - padding}`;
-  const path = coords.length > 1 ? coords.join(" ") : flatLine;
+function StarTimeChart({ points = [] }) {
+  const width = 190;
+  const height = 96;
+  const margin = { top: 13, right: 8, bottom: 22, left: 42 };
+  const plotLeft = margin.left;
+  const plotRight = width - margin.right;
+  const plotTop = margin.top;
+  const plotBottom = height - margin.bottom;
+  const plotWidth = plotRight - plotLeft;
+  const plotHeight = plotBottom - plotTop;
+  const cleaned = points
+    .map((point) => ({
+      stars: Number(point.stars),
+      time: new Date(point.capturedAt).getTime(),
+      capturedAt: point.capturedAt
+    }))
+    .filter((point) => Number.isFinite(point.stars) && Number.isFinite(point.time))
+    .sort((a, b) => a.time - b.time);
+
+  if (!cleaned.length) {
+    return (
+      <svg className="time-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Star count over time">
+        <line className="chart-axis" x1={plotLeft} y1={plotBottom} x2={plotRight} y2={plotBottom} />
+        <line className="chart-axis" x1={plotLeft} y1={plotTop} x2={plotLeft} y2={plotBottom} />
+        <text className="chart-empty" x={(plotLeft + plotRight) / 2} y={(plotTop + plotBottom) / 2}>
+          no snapshots
+        </text>
+      </svg>
+    );
+  }
+
+  const times = cleaned.map((point) => point.time);
+  const values = cleaned.map((point) => point.stars);
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const minStars = Math.min(...values);
+  const maxStars = Math.max(...values);
+  const timeSpread = Math.max(1, maxTime - minTime);
+  const starSpread = Math.max(1, maxStars - minStars);
+  const xFor = (time) => (minTime === maxTime ? plotRight : plotLeft + ((time - minTime) / timeSpread) * plotWidth);
+  const yFor = (stars) => (minStars === maxStars ? plotTop + plotHeight / 2 : plotBottom - ((stars - minStars) / starSpread) * plotHeight);
+  const coords = cleaned.map((point) => ({
+    ...point,
+    x: xFor(point.time),
+    y: yFor(point.stars)
+  }));
+  const path = coords.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const first = cleaned[0];
+  const last = cleaned[cleaned.length - 1];
 
   return (
-    <svg className="sparkline" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Star trend">
-      <polyline className="sparkline-base" points={flatLine} />
-      <polyline className="sparkline-line" points={path} />
-      {coords.length > 0 && <circle className="sparkline-dot" r="3" cx={coords[coords.length - 1].split(",")[0]} cy={coords[coords.length - 1].split(",")[1]} />}
+    <svg className="time-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Star count over time">
+      <line className="chart-grid" x1={plotLeft} y1={plotTop} x2={plotRight} y2={plotTop} />
+      <line className="chart-grid" x1={plotLeft} y1={plotBottom} x2={plotRight} y2={plotBottom} />
+      <line className="chart-axis" x1={plotLeft} y1={plotBottom} x2={plotRight} y2={plotBottom} />
+      <line className="chart-axis" x1={plotLeft} y1={plotTop} x2={plotLeft} y2={plotBottom} />
+      <polyline className="time-chart-line" points={path} />
+      {coords.map((point, index) => (
+        <circle className="time-chart-dot" key={`${point.capturedAt}-${index}`} r="2.5" cx={point.x} cy={point.y} />
+      ))}
+      <text className="chart-label" x={plotLeft - 5} y={plotTop + 3} textAnchor="end">
+        {formatNumber(maxStars)}
+      </text>
+      <text className="chart-label" x={plotLeft - 5} y={plotBottom + 3} textAnchor="end">
+        {formatNumber(minStars)}
+      </text>
+      <text className="chart-label" x={plotLeft} y={height - 4}>
+        {chartTimeFmt.format(new Date(first.time))}
+      </text>
+      <text className="chart-label" x={plotRight} y={height - 4} textAnchor="end">
+        {chartTimeFmt.format(new Date(last.time))}
+      </text>
+      <text className="chart-unit" x={plotLeft} y={8}>
+        stars
+      </text>
+      <text className="chart-unit" x={plotRight} y={plotBottom - 4} textAnchor="end">
+        time
+      </text>
     </svg>
   );
 }
@@ -205,7 +267,7 @@ function RepoRow({ repo, rank }) {
           <strong>{formatVelocity(repo.starsPerHour)}</strong>
           <small>stars / hour</small>
         </div>
-        <StarSparkline points={repo.starHistory || []} />
+        <StarTimeChart points={repo.starHistory || []} />
       </div>
 
       <div className="repo-metrics">
