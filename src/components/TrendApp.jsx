@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  X,
   Zap
 } from "lucide-react";
 
@@ -28,6 +29,7 @@ const pageSize = 10;
 const autoRefreshMs = 5 * 60 * 1000;
 
 const numberFmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const fullNumberFmt = new Intl.NumberFormat("en");
 const dateFmt = new Intl.DateTimeFormat("zh-CN", {
   month: "short",
   day: "numeric",
@@ -37,11 +39,16 @@ const dateFmt = new Intl.DateTimeFormat("zh-CN", {
 const chartTimeFmt = new Intl.DateTimeFormat("zh-CN", {
   month: "numeric",
   day: "numeric",
-  hour: "2-digit"
+  hour: "2-digit",
+  minute: "2-digit"
 });
 
 function formatNumber(value) {
   return numberFmt.format(value || 0);
+}
+
+function formatFullNumber(value) {
+  return fullNumberFmt.format(value || 0);
 }
 
 function formatVelocity(value) {
@@ -151,9 +158,9 @@ function Stat({ icon: Icon, label, value, hint, tone = "" }) {
 }
 
 function StarTimeChart({ points = [] }) {
-  const width = 190;
-  const height = 96;
-  const margin = { top: 13, right: 8, bottom: 22, left: 42 };
+  const width = 760;
+  const height = 320;
+  const margin = { top: 30, right: 28, bottom: 58, left: 78 };
   const plotLeft = margin.left;
   const plotRight = width - margin.right;
   const plotTop = margin.top;
@@ -197,42 +204,50 @@ function StarTimeChart({ points = [] }) {
     y: yFor(point.stars)
   }));
   const path = coords.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const first = cleaned[0];
-  const last = cleaned[cleaned.length - 1];
+  const yTicks = Array.from({ length: 5 }, (_, index) => minStars + (starSpread * index) / 4);
+  const xTicks = Array.from({ length: 4 }, (_, index) => minTime + (timeSpread * index) / 3);
 
   return (
     <svg className="time-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Star count over time">
-      <line className="chart-grid" x1={plotLeft} y1={plotTop} x2={plotRight} y2={plotTop} />
-      <line className="chart-grid" x1={plotLeft} y1={plotBottom} x2={plotRight} y2={plotBottom} />
+      {yTicks.map((tick) => {
+        const y = yFor(tick);
+        return (
+          <g key={`y-${tick}`}>
+            <line className="chart-grid" x1={plotLeft} y1={y} x2={plotRight} y2={y} />
+            <text className="chart-label" x={plotLeft - 10} y={y + 4} textAnchor="end">
+              {formatFullNumber(Math.round(tick))}
+            </text>
+          </g>
+        );
+      })}
+      {xTicks.map((tick) => {
+        const x = xFor(tick);
+        return (
+          <g key={`x-${tick}`}>
+            <line className="chart-grid vertical" x1={x} y1={plotTop} x2={x} y2={plotBottom} />
+            <text className="chart-label" x={x} y={plotBottom + 25} textAnchor="middle">
+              {chartTimeFmt.format(new Date(tick))}
+            </text>
+          </g>
+        );
+      })}
       <line className="chart-axis" x1={plotLeft} y1={plotBottom} x2={plotRight} y2={plotBottom} />
       <line className="chart-axis" x1={plotLeft} y1={plotTop} x2={plotLeft} y2={plotBottom} />
       <polyline className="time-chart-line" points={path} />
       {coords.map((point, index) => (
         <circle className="time-chart-dot" key={`${point.capturedAt}-${index}`} r="2.5" cx={point.x} cy={point.y} />
       ))}
-      <text className="chart-label" x={plotLeft - 5} y={plotTop + 3} textAnchor="end">
-        {formatNumber(maxStars)}
+      <text className="chart-unit" x={plotLeft} y={18}>
+        Stars
       </text>
-      <text className="chart-label" x={plotLeft - 5} y={plotBottom + 3} textAnchor="end">
-        {formatNumber(minStars)}
-      </text>
-      <text className="chart-label" x={plotLeft} y={height - 4}>
-        {chartTimeFmt.format(new Date(first.time))}
-      </text>
-      <text className="chart-label" x={plotRight} y={height - 4} textAnchor="end">
-        {chartTimeFmt.format(new Date(last.time))}
-      </text>
-      <text className="chart-unit" x={plotLeft} y={8}>
-        stars
-      </text>
-      <text className="chart-unit" x={plotRight} y={plotBottom - 4} textAnchor="end">
-        time
+      <text className="chart-unit" x={(plotLeft + plotRight) / 2} y={height - 14} textAnchor="middle">
+        采样时间
       </text>
     </svg>
   );
 }
 
-function RepoRow({ repo, rank }) {
+function RepoRow({ repo, rank, onOpen }) {
   const topics = repo.topics?.slice(0, 4) || [];
   const domain = getRepoDomain(repo);
   const latestSnapshot = repo.lastSeen || repo.starHistory?.[repo.starHistory.length - 1]?.capturedAt;
@@ -267,7 +282,10 @@ function RepoRow({ repo, rank }) {
           <strong>{formatVelocity(repo.starsPerHour)}</strong>
           <small>stars / hour</small>
         </div>
-        <StarTimeChart points={repo.starHistory || []} />
+        <button className="detail-button" onClick={() => onOpen(repo)}>
+          <BarChart3 size={16} />
+          详情
+        </button>
       </div>
 
       <div className="repo-metrics">
@@ -296,6 +314,114 @@ function RepoRow({ repo, rank }) {
         {repo.coldStart ? <span className="cold-start">估算趋势</span> : <span className="delta">+{repo.starDelta} stars</span>}
       </div>
     </article>
+  );
+}
+
+function RepoDetailModal({ repo, windowHours, onClose }) {
+  if (!repo) return null;
+
+  const history = [...(repo.starHistory || [])].sort((a, b) => new Date(a.capturedAt) - new Date(b.capturedAt));
+  const latestSnapshot = repo.lastSeen || history[history.length - 1]?.capturedAt;
+  const firstSnapshot = repo.firstSeen || history[0]?.capturedAt;
+  const topics = repo.topics || [];
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="repo-modal" role="dialog" aria-modal="true" aria-label={`${repo.fullName} 趋势详情`} onClick={(event) => event.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <span className="section-kicker">
+              <BarChart3 size={16} />
+              趋势详情
+            </span>
+            <a className="modal-title" href={repo.url} target="_blank" rel="noreferrer">
+              {repo.fullName}
+              <ArrowUpRight size={18} />
+            </a>
+            <p>{repo.description || "这个仓库暂时没有描述。"}</p>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="关闭详情">
+            <X size={20} />
+          </button>
+        </header>
+
+        <div className="detail-summary">
+          <div>
+            <span>窗口</span>
+            <strong>{formatWindow(windowHours)}</strong>
+          </div>
+          <div>
+            <span>星速</span>
+            <strong>{formatVelocity(repo.starsPerHour)}/h</strong>
+          </div>
+          <div>
+            <span>窗口增量</span>
+            <strong>+{repo.starDelta}</strong>
+          </div>
+          <div>
+            <span>快照数</span>
+            <strong>{repo.snapshotCount || history.length}</strong>
+          </div>
+          <div>
+            <span>当前 stars</span>
+            <strong>{formatFullNumber(repo.stars)}</strong>
+          </div>
+        </div>
+
+        <div className="detail-chart-panel">
+          <div className="chart-heading">
+            <div>
+              <h3>Stars 随采样时间变化</h3>
+              <p>
+                横轴是快照采样时间，纵轴是仓库 star 总数；速度值由窗口内首尾快照计算。
+              </p>
+            </div>
+            <span>{timeAgo(firstSnapshot)} - {timeAgo(latestSnapshot)}</span>
+          </div>
+          <StarTimeChart points={history} />
+        </div>
+
+        <div className="detail-grid">
+          <section>
+            <h3>仓库状态</h3>
+            <div className="detail-list">
+              <div><span>最后 push</span><strong>{timeAgo(repo.pushedAt)}</strong></div>
+              <div><span>快照</span><strong>{timeAgo(latestSnapshot)}</strong></div>
+              <div><span>Forks</span><strong>{formatNumber(repo.forks)}</strong></div>
+              <div><span>Issues</span><strong>{formatNumber(repo.openIssues)}</strong></div>
+            </div>
+          </section>
+          <section>
+            <h3>Topics</h3>
+            <div className="topics">
+              {topics.length ? topics.map((topic) => <span key={topic}>{topic}</span>) : <span>暂无 topic</span>}
+            </div>
+          </section>
+        </div>
+
+        <section className="snapshot-table">
+          <h3>快照明细</h3>
+          <div>
+            <table>
+              <thead>
+                <tr>
+                  <th>采样时间</th>
+                  <th>Stars</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((point) => (
+                  <tr key={point.capturedAt}>
+                    <td>{timeAgo(point.capturedAt)}</td>
+                    <td>{formatFullNumber(point.stars)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </div>
   );
 }
 
@@ -408,6 +534,7 @@ export default function TrendApp({ initialData = null }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [selectedRepo, setSelectedRepo] = useState(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -446,6 +573,17 @@ export default function TrendApp({ initialData = null }) {
   useEffect(() => {
     setPage(1);
   }, [windowHours, language, query]);
+
+  useEffect(() => {
+    if (!selectedRepo) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setSelectedRepo(null);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedRepo]);
 
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -542,7 +680,7 @@ export default function TrendApp({ initialData = null }) {
           </div>
           <div className="list">
             {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
-            {!loading && pageItems.map((repo, index) => <RepoRow repo={repo} rank={pageStart + index + 1} key={repo.id} />)}
+            {!loading && pageItems.map((repo, index) => <RepoRow repo={repo} rank={pageStart + index + 1} key={repo.id} onOpen={setSelectedRepo} />)}
             {!loading && !items.length && <div className="empty">还没有匹配的仓库。换个时间窗口或语言试试。</div>}
           </div>
           {!loading && items.length > pageSize && (
@@ -562,6 +700,8 @@ export default function TrendApp({ initialData = null }) {
 
         <InsightsPanel items={items} languages={languages} generatedAt={generatedAt} sourceData={sourceData} refresh={refresh} />
       </div>
+
+      <RepoDetailModal repo={selectedRepo} windowHours={windowHours} onClose={() => setSelectedRepo(null)} />
     </>
   );
 }
