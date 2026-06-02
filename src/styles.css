@@ -52,11 +52,9 @@ main {
 }
 
 .hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 28px;
-  align-items: end;
-  padding: 18px 0 22px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 14px;
 }
 
 .eyebrow,
