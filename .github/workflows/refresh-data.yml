@@ -2,8 +2,14 @@ name: Refresh GitHub trend data
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - data/github-trends.sqlite
+      - public/data/trending.json
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "7,37 * * * *"
 
 permissions:
   contents: write
