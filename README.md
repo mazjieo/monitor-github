@@ -39,7 +39,7 @@ GitHub Pages -> public website
 ```bash
 GITHUB_TOKEN=ghp_xxx
 REFRESH_CRON=*/30 * * * *
-SNAPSHOT_WINDOW_HOURS=24
+SNAPSHOT_WINDOW_HOURS=168
 MIN_STARS=1000
 ```
 

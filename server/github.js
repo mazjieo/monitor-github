@@ -222,10 +222,7 @@ export async function refreshTrending() {
       const repo = repoFromGitHub(item, capturedAt);
       statements.upsertRepo.run(repo);
 
-      const latest = statements.latestSnapshot.get(repo.id);
-      if (!latest || latest.stargazers_count !== repo.stargazers_count) {
-        statements.insertSnapshot.run(repo.id, repo.stargazers_count, capturedAt);
-      }
+      statements.insertSnapshot.run(repo.id, repo.stargazers_count, capturedAt);
 
       for (const [groupId, pools] of repoGroups.get(repo.id) || []) {
         statements.upsertRepoGroup.run(repo.id, groupId, JSON.stringify([...pools]), capturedAt);
@@ -235,7 +232,8 @@ export async function refreshTrending() {
 
   write([...repos.values()]);
 
-  const cutoff = new Date(Date.now() - Math.max(config.snapshotWindowHours, 24) * 3 * 60 * 60 * 1000).toISOString();
+  const retentionHours = Math.max(config.snapshotWindowHours, 168);
+  const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
   statements.cleanupSnapshots.run(cutoff);
   statements.cleanupRepoGroups.run(cutoff);
 

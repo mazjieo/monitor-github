@@ -85,13 +85,6 @@ export const statements = {
     insert into star_snapshots (repo_id, stargazers_count, captured_at)
     values (?, ?, ?)
   `),
-  latestSnapshot: db.prepare(`
-    select stargazers_count, captured_at
-    from star_snapshots
-    where repo_id = ?
-    order by captured_at desc
-    limit 1
-  `),
   upsertRepoGroup: db.prepare(`
     insert into repo_groups (repo_id, group_id, matched_by, last_seen_at)
     values (?, ?, ?, ?)

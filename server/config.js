@@ -4,7 +4,7 @@ export const config = {
   port: Number(process.env.PORT || 4317),
   githubToken: process.env.GITHUB_TOKEN || "",
   refreshCron: process.env.REFRESH_CRON || "*/30 * * * *",
-  snapshotWindowHours: Number(process.env.SNAPSHOT_WINDOW_HOURS || 24),
+  snapshotWindowHours: Number(process.env.SNAPSHOT_WINDOW_HOURS || 168),
   baselineMinStars: Number(process.env.BASELINE_MIN_STARS || process.env.MIN_STARS || 1000),
   discoveryMinStars: Number(process.env.DISCOVERY_MIN_STARS || process.env.MIN_STARS || 1000),
   searchDelayMs: Number(process.env.GITHUB_SEARCH_DELAY_MS || 2200),
