@@ -43,6 +43,22 @@ SNAPSHOT_WINDOW_HOURS=24
 MIN_STARS=1000
 ```
 
+监控分组在 `config/groups.json` 中维护。新增分组时添加一个 `groups[]` 配置项即可，不需要改采集代码：
+
+```json
+{
+  "id": "robotics",
+  "name": "机器人",
+  "description": "机器人、ROS、SLAM、仿真和具身智能。",
+  "queries": [
+    { "query": "topic:robotics", "sort": "updated" },
+    { "query": "\"robotics\" in:name,description,readme", "sort": "updated" }
+  ]
+}
+```
+
+`综合` 分组保留全 GitHub 兜底扫描，`全部关注` 会聚合除 `综合` 之外的所有关注分组。
+
 建议配置 `GITHUB_TOKEN`，未配置时 GitHub API 匿名额度较低。
 
 ## 常用命令

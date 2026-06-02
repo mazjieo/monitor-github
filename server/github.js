@@ -1,5 +1,6 @@
 import { config } from "./config.js";
 import { db, statements } from "./db.js";
+import { getConfiguredGroups } from "./groups.js";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -9,6 +10,10 @@ function isoHoursAgo(hours) {
 
 function isoDaysAgo(days) {
   return isoHoursAgo(days * 24).slice(0, 10);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function repoFromGitHub(item, capturedAt) {
@@ -70,31 +75,50 @@ async function searchRepositories(query, { perPage = 30, sort = "stars", pool = 
   return { items: data.items || [], rateLimit, pool, totalCount: data.total_count || 0 };
 }
 
-function buildCandidateQueries() {
+function hasQualifier(query, qualifier) {
+  return new RegExp(`(^|\\s)${qualifier}:`, "i").test(query);
+}
+
+function withDefaultQualifiers(query, { minStars, since }) {
+  const parts = [query.trim()];
+  if (!hasQualifier(query, "stars")) {
+    parts.push(`stars:>=${minStars}`);
+  }
+  if (!hasQualifier(query, "pushed") && !hasQualifier(query, "created")) {
+    parts.push(`pushed:>${since}`);
+  }
+  return parts.join(" ");
+}
+
+function buildGlobalQueries(group) {
   const recentSince = isoDaysAgo(config.recentWindowDays);
   const activeSince = isoDaysAgo(config.activeWindowDays);
   const baselineStars = `stars:>=${config.baselineMinStars}`;
   const discoveryStars = `stars:>=${config.discoveryMinStars}`;
-  const queries = [
+  return [
     {
+      groupId: group.id,
       pool: "baseline-stars",
       query: `${baselineStars} pushed:>${recentSince}`,
       sort: "stars",
       perPage: 40
     },
     {
+      groupId: group.id,
       pool: "recent-created",
       query: `${discoveryStars} created:>${recentSince}`,
       sort: "stars",
       perPage: 40
     },
     {
+      groupId: group.id,
       pool: "recent-active",
       query: `${discoveryStars} pushed:>${activeSince}`,
       sort: "updated",
       perPage: 40
     },
     ...config.searchLanguages.map((language) => ({
+      groupId: group.id,
       pool: `language:${language}`,
       query: `language:${language} ${discoveryStars} pushed:>${activeSince}`,
       sort: "updated",
@@ -102,12 +126,14 @@ function buildCandidateQueries() {
     })),
     ...config.searchTopics.flatMap((topic) => [
       {
+        groupId: group.id,
         pool: `topic:${topic}`,
         query: `topic:${topic} ${discoveryStars} pushed:>${recentSince}`,
         sort: "updated",
         perPage: 25
       },
       {
+        groupId: group.id,
         pool: `keyword:${topic}`,
         query: `${topic} in:name,description,readme ${discoveryStars} pushed:>${recentSince}`,
         sort: "updated",
@@ -115,17 +141,42 @@ function buildCandidateQueries() {
       }
     ])
   ];
+}
 
-  return queries;
+function buildFocusedQueries(group) {
+  const activeSince = isoDaysAgo(config.activeWindowDays);
+  return (group.queries || []).map((entry, index) => {
+    const candidate = typeof entry === "string" ? { query: entry } : entry;
+    return {
+      groupId: group.id,
+      pool: candidate.pool || `${group.id}:${index + 1}`,
+      query: withDefaultQualifiers(candidate.query, {
+        minStars: candidate.minStars || config.discoveryMinStars,
+        since: candidate.since || activeSince
+      }),
+      sort: candidate.sort || "updated",
+      perPage: candidate.perPage || 25
+    };
+  });
+}
+
+function buildCandidateQueries() {
+  return getConfiguredGroups().flatMap((group) => {
+    if (group.mode === "global") {
+      return buildGlobalQueries(group);
+    }
+    return buildFocusedQueries(group);
+  });
 }
 
 export async function refreshTrending() {
   const capturedAt = new Date().toISOString();
   const queries = buildCandidateQueries();
 
-  const seen = new Set();
+  const seenByGroup = new Set();
   const poolStats = [];
-  const repos = [];
+  const repos = new Map();
+  const repoGroups = new Map();
   let rateLimit = null;
 
   for (const candidate of queries) {
@@ -134,15 +185,25 @@ export async function refreshTrending() {
     let added = 0;
 
     for (const item of result.items) {
-      if (seen.has(item.id)) {
-        continue;
+      repos.set(item.id, item);
+
+      const groupKey = `${candidate.groupId}:${item.id}`;
+      if (!repoGroups.has(item.id)) {
+        repoGroups.set(item.id, new Map());
       }
-      seen.add(item.id);
-      repos.push(item);
-      added += 1;
+      if (!repoGroups.get(item.id).has(candidate.groupId)) {
+        repoGroups.get(item.id).set(candidate.groupId, new Set());
+      }
+      repoGroups.get(item.id).get(candidate.groupId).add(candidate.pool);
+
+      if (!seenByGroup.has(groupKey)) {
+        seenByGroup.add(groupKey);
+        added += 1;
+      }
     }
 
     poolStats.push({
+      groupId: candidate.groupId,
       pool: candidate.pool,
       query: candidate.query,
       sort: candidate.sort,
@@ -150,6 +211,10 @@ export async function refreshTrending() {
       added,
       totalCount: result.totalCount
     });
+
+    if (config.searchDelayMs > 0) {
+      await sleep(config.searchDelayMs);
+    }
   }
 
   const write = db.transaction((items) => {
@@ -161,19 +226,25 @@ export async function refreshTrending() {
       if (!latest || latest.stargazers_count !== repo.stargazers_count) {
         statements.insertSnapshot.run(repo.id, repo.stargazers_count, capturedAt);
       }
+
+      for (const [groupId, pools] of repoGroups.get(repo.id) || []) {
+        statements.upsertRepoGroup.run(repo.id, groupId, JSON.stringify([...pools]), capturedAt);
+      }
     }
   });
 
-  write(repos);
+  write([...repos.values()]);
 
   const cutoff = new Date(Date.now() - Math.max(config.snapshotWindowHours, 24) * 3 * 60 * 60 * 1000).toISOString();
   statements.cleanupSnapshots.run(cutoff);
+  statements.cleanupRepoGroups.run(cutoff);
 
   return {
     capturedAt,
-    candidates: repos.length,
+    candidates: repos.size,
     baselineMinStars: config.baselineMinStars,
     discoveryMinStars: config.discoveryMinStars,
+    groups: getConfiguredGroups().map(({ id, name, mode = "focused" }) => ({ id, name, mode })),
     pools: poolStats,
     rateLimit
   };

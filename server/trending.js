@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { config } from "./config.js";
+import { getGroups, isWatchGroup, normalizeGroupId } from "./groups.js";
 
 function number(value, fallback) {
   const parsed = Number(value);
@@ -33,12 +34,42 @@ function getStarHistory(repoId, since) {
     .all(repoId, since);
 }
 
-export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}) {
+function groupCondition(groupId, alias = "r") {
+  if (isWatchGroup(groupId)) {
+    return `(not exists (select 1 from repo_groups) or exists (
+        select 1
+        from repo_groups rg
+        where rg.repo_id = ${alias}.id
+          and rg.group_id != 'global'
+      )
+    )`;
+  }
+
+  if (groupId === "global") {
+    return `(not exists (select 1 from repo_groups) or exists (
+        select 1
+        from repo_groups rg
+        where rg.repo_id = ${alias}.id
+          and rg.group_id = @groupId
+      )
+    )`;
+  }
+
+  return `exists (
+      select 1
+      from repo_groups rg
+      where rg.repo_id = ${alias}.id
+        and rg.group_id = @groupId
+    )`;
+}
+
+export function getTrending({ windowHours = 24, language = "", group = "watch", limit = 50 } = {}) {
   const hours = Math.min(Math.max(number(windowHours, 24), 1), 168);
   const maxRows = Math.min(Math.max(number(limit, 50), 1), 100);
+  const groupId = normalizeGroupId(group);
   const now = new Date().toISOString();
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const params = { since, language: language || null, limit: maxRows, minStars: config.minStars };
+  const params = { since, language: language || null, groupId, limit: maxRows, minStars: config.minStars };
 
   const rows = db
     .prepare(`
@@ -70,6 +101,7 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
         on last_snapshot.repo_id = r.id and last_snapshot.captured_at = recent.last_seen
       where r.stargazers_count >= @minStars
         and (@language is null or lower(r.language) = lower(@language))
+        and ${groupCondition(groupId)}
       order by r.last_seen_at desc
       limit @limit
     `)
@@ -127,20 +159,27 @@ export function getTrending({ windowHours = 24, language = "", limit = 50 } = {}
     generatedAt: new Date().toISOString(),
     windowHours: hours,
     language: language || "all",
+    group: groupId,
     minStars: config.minStars,
     items
   };
 }
 
-export function getLanguages() {
+export function getLanguages({ group = "watch" } = {}) {
+  const groupId = normalizeGroupId(group);
   return db
     .prepare(`
       select language, count(*) as count
-      from repositories
+      from repositories r
       where language is not null and language != ''
-        and stargazers_count >= ?
+        and stargazers_count >= @minStars
+        and ${groupCondition(groupId)}
       group by language
       order by count desc, language asc
     `)
-    .all(config.minStars);
+    .all({ minStars: config.minStars, groupId });
+}
+
+export function getTrendGroups() {
+  return getGroups();
 }

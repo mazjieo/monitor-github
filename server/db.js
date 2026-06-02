@@ -38,8 +38,20 @@ db.exec(`
     foreign key (repo_id) references repositories(id)
   );
 
+  create table if not exists repo_groups (
+    repo_id integer not null,
+    group_id text not null,
+    matched_by text not null default '[]',
+    last_seen_at text not null,
+    primary key (repo_id, group_id),
+    foreign key (repo_id) references repositories(id)
+  );
+
   create index if not exists idx_snapshots_repo_time
     on star_snapshots(repo_id, captured_at);
+
+  create index if not exists idx_repo_groups_group
+    on repo_groups(group_id, repo_id);
 `);
 
 export const statements = {
@@ -80,8 +92,19 @@ export const statements = {
     order by captured_at desc
     limit 1
   `),
+  upsertRepoGroup: db.prepare(`
+    insert into repo_groups (repo_id, group_id, matched_by, last_seen_at)
+    values (?, ?, ?, ?)
+    on conflict(repo_id, group_id) do update set
+      matched_by = excluded.matched_by,
+      last_seen_at = excluded.last_seen_at
+  `),
   cleanupSnapshots: db.prepare(`
     delete from star_snapshots
     where captured_at < ?
+  `),
+  cleanupRepoGroups: db.prepare(`
+    delete from repo_groups
+    where last_seen_at < ?
   `)
 };

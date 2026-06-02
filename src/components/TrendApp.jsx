@@ -534,6 +534,7 @@ function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
 }
 
 export default function TrendApp({ initialData = null }) {
+  const [group, setGroup] = useState("watch");
   const [windowHours, setWindowHours] = useState(24);
   const [language, setLanguage] = useState("");
   const [query, setQuery] = useState("");
@@ -549,17 +550,19 @@ export default function TrendApp({ initialData = null }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const trendingPath = `/api/trending?windowHours=${windowHours}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
+  const trendingPath = `/api/trending?group=${encodeURIComponent(group)}&windowHours=${windowHours}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
   const staticTrending = useStaticTrending(refreshTick, initialData);
-  const apiTrending = useApi(trendingPath, [windowHours, language, refreshTick]);
-  const apiLanguages = useApi("/api/languages", [refreshTick]);
-  const staticWindow = staticTrending.data?.windows?.[String(windowHours)];
+  const apiTrending = useApi(trendingPath, [group, windowHours, language, refreshTick]);
+  const apiGroups = useApi("/api/groups", [refreshTick]);
+  const apiLanguages = useApi(`/api/languages?group=${encodeURIComponent(group)}`, [group, refreshTick]);
+  const groups = apiGroups.data?.items || staticTrending.data?.groups || [{ id: "watch", name: "全部关注" }, { id: "global", name: "综合" }];
+  const staticWindow = staticTrending.data?.groupWindows?.[group]?.[String(windowHours)] || (group === "watch" ? staticTrending.data?.windows?.[String(windowHours)] : null);
   const apiWindow = apiTrending.data || null;
   const sourceData = apiWindow || staticWindow || apiTrending.data;
   const sourceLabel = apiWindow ? "实时 API" : "静态快照";
   const loading = staticTrending.loading && apiTrending.loading;
   const error = staticTrending.error && apiTrending.error ? staticTrending.error : "";
-  const languages = apiLanguages.data?.items || staticTrending.data?.languages || [];
+  const languages = apiLanguages.data?.items || staticTrending.data?.groupLanguages?.[group] || (group === "watch" ? staticTrending.data?.languages : []) || [];
   const generatedAt = sourceData?.generatedAt || staticTrending.data?.generatedAt;
   const refresh = staticTrending.data?.refresh;
 
@@ -579,7 +582,11 @@ export default function TrendApp({ initialData = null }) {
 
   useEffect(() => {
     setPage(1);
-  }, [windowHours, language, query]);
+  }, [group, windowHours, language, query]);
+
+  useEffect(() => {
+    setLanguage("");
+  }, [group]);
 
   useEffect(() => {
     if (!selectedRepo) return undefined;
@@ -638,6 +645,14 @@ export default function TrendApp({ initialData = null }) {
         <Stat icon={Star} label="榜首增量" value={totals.topDelta} hint="窗口内新增" tone="tone-green" />
         <Stat icon={BarChart3} label="总星标量" value={totals.totalStars} hint="当前筛选合集" tone="tone-purple" />
         <Stat icon={ShieldCheck} label="数据更新" value={formatGeneratedAt(generatedAt)} hint="静态快照" tone="tone-gray" />
+      </section>
+
+      <section className="group-tabs" aria-label="选择监控分组">
+        {groups.map((item) => (
+          <button key={item.id} className={group === item.id ? "active" : ""} onClick={() => setGroup(item.id)} title={item.description || item.name}>
+            {item.name}
+          </button>
+        ))}
       </section>
 
       <section className="toolbar" aria-label="筛选和搜索">

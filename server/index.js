@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { refreshTrending } from "./github.js";
-import { getLanguages, getTrending } from "./trending.js";
+import { getLanguages, getTrending, getTrendGroups } from "./trending.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -43,8 +43,12 @@ app.get("/api/health", (_request, response) => {
   response.json({ ok: true, lastRefresh });
 });
 
-app.get("/api/languages", (_request, response) => {
-  response.json({ items: getLanguages() });
+app.get("/api/groups", (_request, response) => {
+  response.json({ items: getTrendGroups() });
+});
+
+app.get("/api/languages", (request, response) => {
+  response.json({ items: getLanguages({ group: request.query.group }) });
 });
 
 app.get("/api/trending", (request, response) => {
@@ -52,6 +56,7 @@ app.get("/api/trending", (request, response) => {
     getTrending({
       windowHours: request.query.windowHours,
       language: request.query.language,
+      group: request.query.group,
       limit: request.query.limit
     })
   );

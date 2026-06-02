@@ -1,0 +1,115 @@
+{
+  "groups": [
+    {
+      "id": "ai",
+      "name": "AI",
+      "description": "AI 应用、智能体、多模态、生成式工具和自动化工作流。",
+      "queries": [
+        { "query": "topic:ai", "sort": "updated" },
+        { "query": "topic:artificial-intelligence", "sort": "updated" },
+        { "query": "topic:generative-ai", "sort": "updated" },
+        { "query": "\"ai agent\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"ai workflow\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"computer vision\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"image generation\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "llm",
+      "name": "LLM",
+      "description": "大语言模型生态、RAG、推理、评测、MCP、Prompt 和 Agent 框架。",
+      "queries": [
+        { "query": "topic:llm", "sort": "updated" },
+        { "query": "topic:rag", "sort": "updated" },
+        { "query": "topic:mcp", "sort": "updated" },
+        { "query": "topic:agents", "sort": "updated" },
+        { "query": "\"large language model\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"llm framework\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"prompt engineering\" in:name,description,readme", "sort": "updated" },
+        { "query": "embedding in:name,description,readme", "sort": "updated" },
+        { "query": "inference in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "frontend-visual-interaction",
+      "name": "前端视觉交互",
+      "description": "前端动效、交互、可视化、Canvas、WebGL、Shader、滚动和手势体验。",
+      "queries": [
+        { "query": "topic:animation language:javascript", "sort": "updated" },
+        { "query": "topic:animation language:typescript", "sort": "updated" },
+        { "query": "topic:canvas language:javascript", "sort": "updated" },
+        { "query": "topic:webgl language:typescript", "sort": "updated" },
+        { "query": "topic:threejs", "sort": "updated" },
+        { "query": "topic:gsap", "sort": "updated" },
+        { "query": "\"scroll animation\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"interactive visualization\" in:name,description,readme", "sort": "updated" },
+        { "query": "shader in:name,description,readme language:typescript", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "frontend-creative-design",
+      "name": "前端页面创意设计",
+      "description": "创意页面、落地页、作品集、模板、设计系统展示和高完成度网站体验。",
+      "queries": [
+        { "query": "\"creative website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"landing page\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"portfolio website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"website template\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"nextjs template\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"framer\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"design system\" in:name,description,readme frontend", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "java",
+      "name": "Java",
+      "description": "Java/JVM、Spring、后端中间件、开发工具和工程实践。",
+      "queries": [
+        { "query": "language:java", "sort": "updated" },
+        { "query": "topic:spring-boot", "sort": "updated" },
+        { "query": "topic:jvm", "sort": "updated" },
+        { "query": "topic:java", "sort": "updated" },
+        { "query": "\"java agent\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"spring cloud\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "indie-sites",
+      "name": "独立站",
+      "description": "帮助独立开发者把网站做出来、推出去、卖起来、运营起来的建站、获客、支付、内容和增长工具。",
+      "queries": [
+        { "query": "\"saas starter\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"saas boilerplate\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"landing page\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"stripe subscription\" in:name,description,readme", "sort": "updated" },
+        { "query": "lemonsqueezy in:name,description,readme", "sort": "updated" },
+        { "query": "\"programmatic seo\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"website builder\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"directory website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"waitlist\" in:name,description,readme startup", "sort": "updated" },
+        { "query": "\"newsletter\" in:name,description,readme saas", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "toon-3d",
+      "name": "三渲二 3D",
+      "description": "三渲二、Toon/Cel Shading、NPR、风格化 3D、动漫感实时渲染和相关工具。",
+      "queries": [
+        { "query": "\"toon shading\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"cel shading\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"non photorealistic rendering\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"npr rendering\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"stylized rendering\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"anime shader\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"threejs toon\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"unity toon\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "global",
+      "name": "综合",
+      "description": "全 GitHub 兜底扫描，避免关注组之外的爆发项目被漏掉。",
+      "mode": "global"
+    }
+  ]
+}

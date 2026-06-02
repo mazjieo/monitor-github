@@ -36,6 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.MONITOR_GITHUB_TOKEN }}
           BASELINE_MIN_STARS: 1000
           DISCOVERY_MIN_STARS: 1000
+          GITHUB_SEARCH_DELAY_MS: 2200
 
       - name: Commit data changes
         run: |
