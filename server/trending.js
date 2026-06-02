@@ -66,10 +66,11 @@ function groupCondition(groupId, alias = "r") {
 export function getTrending({ windowHours = 24, language = "", group = "watch", limit = 50 } = {}) {
   const hours = Math.min(Math.max(number(windowHours, 24), 1), 168);
   const maxRows = Math.min(Math.max(number(limit, 50), 1), 100);
+  const candidateLimit = Math.min(Math.max(maxRows * 10, 300), 1000);
   const groupId = normalizeGroupId(group);
   const now = new Date().toISOString();
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const params = { since, language: language || null, groupId, limit: maxRows, minStars: config.minStars };
+  const params = { since, language: language || null, groupId, limit: candidateLimit, minStars: config.minStars };
 
   const rows = db
     .prepare(`
@@ -112,8 +113,7 @@ export function getTrending({ windowHours = 24, language = "", group = "watch", 
     const starDelta = Math.max(0, (row.last_stars || row.stargazers_count) - (row.first_stars || row.stargazers_count));
     const createdHours = Math.max(1, hoursBetween(row.created_at, new Date().toISOString()));
     const observedStarsPerHour = observedHours > 0 ? starDelta / observedHours : 0;
-    const coldStartStarsPerHour = row.stargazers_count / createdHours;
-    const velocity = observedHours > 0 ? observedStarsPerHour : coldStartStarsPerHour;
+    const estimatedStarsPerHour = row.stargazers_count / createdHours;
     const coldStart = observedHours === 0;
 
     return {
@@ -138,8 +138,9 @@ export function getTrending({ windowHours = 24, language = "", group = "watch", 
       starHistory: getStarHistory(row.id, since),
       starDelta,
       observedHours,
-      starsPerHour: velocity,
+      starsPerHour: observedStarsPerHour,
       observedStarsPerHour,
+      estimatedStarsPerHour,
       trendScore: trendScore({
         starDelta,
         observedStarsPerHour,
@@ -153,7 +154,14 @@ export function getTrending({ windowHours = 24, language = "", group = "watch", 
     };
   });
 
-  items.sort((a, b) => b.trendScore - a.trendScore || b.starDelta - a.starDelta || b.starsPerHour - a.starsPerHour || b.stars - a.stars);
+  items.sort(
+    (a, b) =>
+      Number(a.coldStart) - Number(b.coldStart) ||
+      b.trendScore - a.trendScore ||
+      b.starDelta - a.starDelta ||
+      b.observedStarsPerHour - a.observedStarsPerHour ||
+      b.stars - a.stars
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -161,7 +169,7 @@ export function getTrending({ windowHours = 24, language = "", group = "watch", 
     language: language || "all",
     group: groupId,
     minStars: config.minStars,
-    items
+    items: items.slice(0, maxRows)
   };
 }
 

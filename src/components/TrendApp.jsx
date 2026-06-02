@@ -57,6 +57,14 @@ function formatVelocity(value) {
   return value.toFixed(3);
 }
 
+function repoVelocityLabel(repo) {
+  return repo?.coldStart ? "待复测" : formatVelocity(repo?.starsPerHour || 0);
+}
+
+function repoVelocityUnit(repo) {
+  return repo?.coldStart ? "下一次快照后计算" : "stars / hour";
+}
+
 function timeAgo(value) {
   if (!value) return "暂无";
   return dateFmt.format(new Date(value));
@@ -279,8 +287,8 @@ function RepoRow({ repo, rank, onOpen }) {
       <div className="repo-score">
         <div>
           <span>velocity</span>
-          <strong>{formatVelocity(repo.starsPerHour)}</strong>
-          <small>stars / hour</small>
+          <strong>{repoVelocityLabel(repo)}</strong>
+          <small>{repoVelocityUnit(repo)}</small>
         </div>
         <button className="detail-button" onClick={() => onOpen(repo)}>
           <BarChart3 size={16} />
@@ -352,7 +360,7 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
           </div>
           <div>
             <span>星速</span>
-            <strong>{formatVelocity(repo.starsPerHour)}/h</strong>
+            <strong>{repo.coldStart ? "待复测" : `${formatVelocity(repo.starsPerHour)}/h`}</strong>
           </div>
           <div>
             <span>窗口增量</span>
@@ -453,8 +461,8 @@ function Spotlight({ repo, windowHours }) {
       </div>
       <div className="spotlight-score">
         <span>Star velocity</span>
-        <strong>{formatVelocity(repo.starsPerHour)}</strong>
-        <small>stars / hour</small>
+        <strong>{repoVelocityLabel(repo)}</strong>
+        <small>{repoVelocityUnit(repo)}</small>
       </div>
     </section>
   );
@@ -610,11 +618,12 @@ export default function TrendApp({ initialData = null }) {
     const visibleRepos = language ? repos.filter((repo) => repo.language?.toLowerCase() === language.toLowerCase()) : repos;
     const observed = visibleRepos.filter((repo) => !repo.coldStart).length;
     const top = visibleRepos[0];
+    const topObserved = visibleRepos.find((repo) => !repo.coldStart);
     const totalStars = visibleRepos.reduce((sum, repo) => sum + (repo.stars || 0), 0);
     return {
       count: visibleRepos.length,
       observed,
-      topVelocity: top ? formatVelocity(top.starsPerHour) : "0",
+      topVelocity: topObserved ? `${formatVelocity(topObserved.starsPerHour)}/h` : "待复测",
       topDelta: top ? `+${top.starDelta}` : "+0",
       totalStars: formatNumber(totalStars)
     };
@@ -641,7 +650,7 @@ export default function TrendApp({ initialData = null }) {
 
       <section className="stats" aria-label="趋势统计">
         <Stat icon={Code2} label="候选项目" value={totals.count} hint={`${totals.observed} 个真实快照`} tone="tone-blue" />
-        <Stat icon={Zap} label="最高星速" value={`${totals.topVelocity}/h`} hint={formatWindow(windowHours)} tone="tone-gold" />
+        <Stat icon={Zap} label="最高星速" value={totals.topVelocity} hint={formatWindow(windowHours)} tone="tone-gold" />
         <Stat icon={Star} label="榜首增量" value={totals.topDelta} hint="窗口内新增" tone="tone-green" />
         <Stat icon={BarChart3} label="总星标量" value={totals.totalStars} hint="当前筛选合集" tone="tone-purple" />
         <Stat icon={ShieldCheck} label="数据更新" value={formatGeneratedAt(generatedAt)} hint="静态快照" tone="tone-gray" />
