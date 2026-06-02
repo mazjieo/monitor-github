@@ -32,7 +32,7 @@
     },
     {
       "id": "frontend-visual-interaction",
-      "name": "前端视觉交互",
+      "name": "视觉交互",
       "description": "前端动效、交互、可视化、Canvas、WebGL、Shader、滚动和手势体验。",
       "queries": [
         { "query": "topic:animation language:javascript", "sort": "updated" },
@@ -48,7 +48,7 @@
     },
     {
       "id": "frontend-creative-design",
-      "name": "前端页面创意设计",
+      "name": "创意页面",
       "description": "创意页面、落地页、作品集、模板、设计系统展示和高完成度网站体验。",
       "queries": [
         { "query": "\"creative website\" in:name,description,readme", "sort": "updated" },
@@ -92,7 +92,7 @@
     },
     {
       "id": "toon-3d",
-      "name": "三渲二 3D",
+      "name": "三渲二",
       "description": "三渲二、Toon/Cel Shading、NPR、风格化 3D、动漫感实时渲染和相关工具。",
       "queries": [
         { "query": "\"toon shading\" in:name,description,readme", "sort": "updated" },

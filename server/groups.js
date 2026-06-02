@@ -14,7 +14,7 @@ export const configuredGroups = readGroupConfig();
 
 export const watchGroup = {
   id: "watch",
-  name: "全部关注",
+  name: "关注合集",
   description: "聚合所有关注分组，不包含综合兜底组。",
   virtual: true
 };
