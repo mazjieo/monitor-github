@@ -37,6 +37,8 @@ function repoFromGitHub(item, capturedAt) {
 }
 
 async function githubFetch(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.githubRequestTimeoutMs);
   const headers = {
     Accept: "application/vnd.github+json",
     "User-Agent": "monitor-github-star-radar"
@@ -46,7 +48,18 @@ async function githubFetch(url) {
     headers.Authorization = `Bearer ${config.githubToken}`;
   }
 
-  const response = await fetch(url, { headers });
+  let response;
+  try {
+    response = await fetch(url, { headers, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`GitHub API request timed out after ${config.githubRequestTimeoutMs}ms: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+
   const rateLimit = {
     limit: response.headers.get("x-ratelimit-limit"),
     remaining: response.headers.get("x-ratelimit-remaining"),

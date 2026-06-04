@@ -4,6 +4,7 @@ import { getGroups, isWatchGroup, normalizeGroupId } from "./groups.js";
 
 export const rankingModes = [
   { id: "opportunity", name: "机会总榜" },
+  { id: "discovery", name: "发现榜" },
   { id: "breakout", name: "爆发榜" },
   { id: "early", name: "早期机会榜" },
   { id: "indie", name: "Indie Hacker 榜" },
@@ -91,9 +92,21 @@ function searchableText(repo) {
     .toLowerCase();
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesTerm(text, term) {
+  const normalizedTerm = term.toLowerCase();
+  if (/^[a-z0-9./+#-]+$/.test(normalizedTerm)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedTerm)}([^a-z0-9]|$)`).test(text);
+  }
+  return text.includes(normalizedTerm);
+}
+
 function findSignals(text, group) {
   return signalGroups[group]
-    .filter((signal) => signal.terms.some((term) => text.includes(term.toLowerCase())))
+    .filter((signal) => signal.terms.some((term) => matchesTerm(text, term)))
     .map((signal) => signal.label);
 }
 
@@ -103,6 +116,107 @@ function unique(values) {
 
 function formatSignalList(values) {
   return values.slice(0, 3).join("、");
+}
+
+function getOpportunityTier(score) {
+  if (score >= 90) return "S级机会";
+  if (score >= 75) return "A级机会";
+  if (score >= 60) return "B级机会";
+  if (score >= 40) return "C级机会";
+  return "观察";
+}
+
+function getConfidenceScore({ repo, forkRatio, topicCount, ageDays, pushedAgeHours }) {
+  const snapshotScore = clamp((repo.snapshotCount || 0) * 12, 0, 30);
+  const forkScore = clamp(forkRatio * 260, 0, 18);
+  const topicScore = clamp(topicCount * 3, 0, 18);
+  const issueScore = repo.openIssues > 0 ? 12 : repo.stars < 500 ? 6 : 2;
+  const ageScore = ageDays >= 30 ? 12 : clamp(ageDays / 30, 0, 1) * 8;
+  const pushScore = pushedAgeHours <= 24 ? 10 : pushedAgeHours <= 72 ? 8 : pushedAgeHours <= 168 ? 5 : 1;
+
+  return Math.round(clamp(snapshotScore + forkScore + topicScore + issueScore + ageScore + pushScore, 0, 100));
+}
+
+function getDiscoveryScore({ repo, confidenceScore, monetizationSignals, cloneabilitySignals, ageDays, relativeGrowth }) {
+  const earlyFit = repo.stars >= 100 && repo.stars <= 3000 ? 28 : repo.stars > 50000 ? -30 : repo.stars > 10000 ? -12 : 6;
+  const growthFit = clamp(relativeGrowth * 600 + Math.log1p(repo.starDelta) * 4 + Math.log1p(repo.starsPerHour || 0) * 6, 0, 28);
+  const freshnessFit = ageDays <= 30 ? 16 : ageDays <= 90 ? 14 : ageDays <= 180 ? 10 : ageDays <= 365 ? 6 : 0;
+  const confidenceFit = clamp(confidenceScore * 0.18, 0, 18);
+  const utilityFit = clamp((monetizationSignals.length > 0 ? 7 : 0) + (cloneabilitySignals.length > 0 ? 7 : 0), 0, 14);
+  const maturityPenalty = repo.stars >= 50000 ? 18 : repo.stars >= 20000 ? 10 : 0;
+
+  return Math.round(clamp(earlyFit + growthFit + freshnessFit + confidenceFit + utilityFit - maturityPenalty, 0, 100));
+}
+
+function getReviewSignals({ repo, confidenceScore, forkRatio, topicCount, relativeGrowth, suspiciousTextSignals }) {
+  const reviewSignals = [];
+
+  if (confidenceScore < 40 || repo.snapshotCount <= 1) {
+    reviewSignals.push({
+      type: "lowConfidence",
+      label: repo.snapshotCount <= 1 ? "快照不足" : "低置信度",
+      reason: repo.snapshotCount <= 1 ? "只有 1 次快照，增长趋势还需要复测" : "快照、社区或活跃度信号不足"
+    });
+  }
+  if ((repo.starDelta >= 80 || repo.stars >= 5000) && forkRatio < 0.01 && topicCount <= 1 && repo.openIssues <= 1) {
+    reviewSignals.push({
+      type: "communityMismatch",
+      label: "社区信号偏弱",
+      reason: "stars 相对 forks、issues、topics 的社区协作信号偏弱"
+    });
+  }
+  if (suspiciousTextSignals.length > 0) {
+    reviewSignals.push({
+      type: "marketingStyle",
+      label: "营销描述较重",
+      reason: `描述命中需要人工判断的词：${formatSignalList(suspiciousTextSignals)}`
+    });
+  }
+  if (relativeGrowth >= 0.35 && repo.starDelta >= 120 && repo.snapshotCount <= 2) {
+    reviewSignals.push({
+      type: "suspiciousGrowth",
+      label: "增长异常",
+      reason: "短窗口相对增长很高，但快照数量还不足"
+    });
+  }
+
+  return reviewSignals;
+}
+
+function buildWhyNow({ repo, ageDays, relativeGrowth, monetizationSignals, cloneabilitySignals, aiSignals, confidenceScore, discoveryScore }) {
+  const whyNow = [];
+
+  if (repo.starDelta > 0) {
+    whyNow.push(`过去窗口新增 ${repo.starDelta} stars，约 ${round(repo.starsPerHour || 0)} stars/hour`);
+  }
+  if (relativeGrowth >= 0.01) {
+    whyNow.push(`相对增长 ${(relativeGrowth * 100).toFixed(1)}%，说明不是只靠大基数在涨`);
+  }
+  if (ageDays <= 365) {
+    whyNow.push(`项目创建约 ${Math.max(1, Math.round(ageDays))} 天，还处在可研究窗口`);
+  }
+  if (repo.stars >= 100 && repo.stars <= 3000) {
+    whyNow.push("stars 处在 100-3000 的早期机会区间");
+  }
+  if (discoveryScore >= 60) {
+    whyNow.push(`发现分 ${discoveryScore}，像是还没完全被市场消化的项目`);
+  }
+  if (confidenceScore >= 60) {
+    whyNow.push(`置信度 ${confidenceScore}，社区与快照信号相对可信`);
+  }
+  if (monetizationSignals.length || cloneabilitySignals.length || aiSignals.length) {
+    const pieces = [
+      ...monetizationSignals.slice(0, 2),
+      ...cloneabilitySignals.slice(0, 2),
+      ...aiSignals.slice(0, 2)
+    ];
+    whyNow.push(`可研究线索：${formatSignalList(unique(pieces))}`);
+  }
+  if (!whyNow.length) {
+    whyNow.push("有基础项目活跃度，但还需要下一轮快照确认是否值得深入");
+  }
+
+  return unique(whyNow).slice(0, 6);
 }
 
 function scoreOpportunity(repo, now) {
@@ -116,6 +230,7 @@ function scoreOpportunity(repo, now) {
   const relativeGrowth = repo.stars > 0 ? repo.starDelta / repo.stars : 0;
   const forkRatio = repo.stars > 0 ? repo.forks / repo.stars : 0;
   const topicCount = repo.topics?.length || 0;
+  const confidenceScore = getConfidenceScore({ repo, forkRatio, topicCount, ageDays, pushedAgeHours });
 
   let early = 0;
   if (repo.stars >= 100 && repo.stars <= 300) early = 18;
@@ -134,9 +249,9 @@ function scoreOpportunity(repo, now) {
     0,
     16
   );
-  const cloneability = clamp(cloneabilitySignals.length * 3.2, 0, 12);
-  const monetization = clamp(monetizationSignals.length * 3, 0, 12);
-  const aiOpportunity = clamp(aiSignals.length * 2.8, 0, 10);
+  const cloneability = clamp(cloneabilitySignals.length * 2.4, 0, 9);
+  const monetization = clamp(monetizationSignals.length * 2.4, 0, 9);
+  const aiOpportunity = clamp(aiSignals.length * 2, 0, 7);
   const quality = clamp(
     Math.log1p(repo.forks) * 1.4 +
       (repo.openIssues > 0 ? 2.5 : 0) +
@@ -145,30 +260,47 @@ function scoreOpportunity(repo, now) {
     0,
     14
   );
+  const discoveryScore = getDiscoveryScore({
+    repo,
+    confidenceScore,
+    monetizationSignals,
+    cloneabilitySignals,
+    ageDays,
+    relativeGrowth
+  });
+  const reviewSignals = getReviewSignals({
+    repo,
+    confidenceScore,
+    forkRatio,
+    topicCount,
+    relativeGrowth,
+    suspiciousTextSignals
+  });
 
-  const suspiciousSignals = [...suspiciousTextSignals];
-  if (repo.starDelta >= 300 && forkRatio < 0.01 && repo.openIssues <= 1 && topicCount <= 1) {
-    suspiciousSignals.push("高增长但 forks/issues/topics 很少");
-  }
-  if (repo.stars >= 5000 && repo.forks < 15 && topicCount === 0) {
-    suspiciousSignals.push("高 stars 但社区协作信号很弱");
-  }
-  if (relativeGrowth >= 0.35 && repo.starDelta >= 200 && repo.snapshotCount <= 2) {
-    suspiciousSignals.push("短窗口暴涨且快照置信度低");
-  }
-
-  const suspiciousPenalty = clamp(unique(suspiciousSignals).length * 8, 0, 30);
+  const reviewPenalty = clamp(
+    reviewSignals.reduce((sum, signal) => {
+      if (signal.type === "lowConfidence") return sum + 6;
+      if (signal.type === "communityMismatch") return sum + 8;
+      if (signal.type === "marketingStyle") return sum + 5;
+      if (signal.type === "suspiciousGrowth") return sum + 8;
+      return sum;
+    }, 0),
+    0,
+    24
+  );
   const rawScore =
-    early +
-    growth +
+    early * 0.65 +
+    growth * 1.15 +
     relativeGrowthScore +
     freshness +
+    confidenceScore * 0.18 +
     cloneability +
     monetization +
     aiOpportunity +
-    quality -
-    suspiciousPenalty;
+    quality * 0.75 -
+    reviewPenalty;
   const opportunityScore = Math.round(clamp(rawScore, 0, 100));
+  const opportunityTier = getOpportunityTier(opportunityScore);
 
   const opportunityTags = [];
   if (repo.starDelta >= 50 || repo.starsPerHour >= 2) opportunityTags.push("爆发增长");
@@ -178,7 +310,8 @@ function scoreOpportunity(repo, now) {
   if (monetizationSignals.length) opportunityTags.push(monetizationSignals.includes("SaaS") ? "SaaS 模板" : "变现线索");
   if (cloneabilitySignals.length) opportunityTags.push("可抄作业");
   if (aiSignals.length) opportunityTags.push(aiSignals.includes("Agent") ? "AI Agent" : "AI 机会");
-  if (suspiciousSignals.length) opportunityTags.push("疑似刷星");
+  if (discoveryScore >= 60) opportunityTags.push("值得发现");
+  if (reviewSignals.length) opportunityTags.push("需要复核");
 
   const opportunityReasons = [];
   if (repo.starDelta > 0) {
@@ -204,27 +337,50 @@ function scoreOpportunity(repo, now) {
   if (aiSignals.length) {
     opportunityReasons.push(`命中 AI 机会信号：${formatSignalList(aiSignals)}`);
   }
-  if (suspiciousSignals.length) {
-    opportunityReasons.push(`需要复核：${formatSignalList(unique(suspiciousSignals))}`);
+  if (confidenceScore >= 60) {
+    opportunityReasons.push(`置信度 ${confidenceScore}，社区和快照信号较稳`);
+  } else if (confidenceScore < 40) {
+    opportunityReasons.push(`置信度 ${confidenceScore}，建议先轻量观察`);
   }
+  if (reviewSignals.length) {
+    opportunityReasons.push(`需要复核：${formatSignalList(reviewSignals.map((signal) => signal.label))}`);
+  }
+  const whyNow = buildWhyNow({
+    repo,
+    ageDays,
+    relativeGrowth,
+    monetizationSignals,
+    cloneabilitySignals,
+    aiSignals,
+    confidenceScore,
+    discoveryScore
+  });
 
   return {
     opportunityScore,
+    opportunityTier,
+    discoveryScore,
+    confidenceScore,
+    whyNow,
     opportunityTags: unique(opportunityTags).slice(0, 5),
     opportunityReasons: unique(opportunityReasons).slice(0, 6),
     monetizationSignals: unique(monetizationSignals),
     cloneabilitySignals: unique(cloneabilitySignals),
-    suspiciousSignals: unique(suspiciousSignals),
+    reviewSignals,
+    suspiciousSignals: unique(reviewSignals.map((signal) => signal.label)),
     scoreBreakdown: {
       early: round(early),
       growth: round(growth),
       relativeGrowth: round(relativeGrowthScore),
       freshness: round(freshness),
+      confidence: round(confidenceScore),
+      discovery: round(discoveryScore),
       cloneability: round(cloneability),
       monetization: round(monetization),
       aiOpportunity: round(aiOpportunity),
       quality: round(quality),
-      suspiciousPenalty: round(suspiciousPenalty),
+      reviewPenalty: round(reviewPenalty),
+      suspiciousPenalty: round(reviewPenalty),
       rawScore: round(rawScore),
       final: opportunityScore
     }
@@ -241,7 +397,9 @@ function compareNumbers(...values) {
 function rankItems(items, mode) {
   const normalizedMode = normalizeMode(mode);
   const filtered = items.filter((item) => {
-    if (normalizedMode === "early") return item.stars >= 100 && item.stars <= 3000;
+    if (normalizedMode === "early") {
+      return item.stars >= 100 && item.stars <= 3000 && (item.starDelta >= 10 || item.relativeGrowth >= 0.01 || item.starsPerHour >= 0.2);
+    }
     if (normalizedMode === "indie") return item.monetizationSignals.length > 0;
     if (normalizedMode === "cloneable") return item.cloneabilitySignals.length > 0;
     if (normalizedMode === "ai") return item.scoreBreakdown.aiOpportunity > 0;
@@ -260,10 +418,17 @@ function rankItems(items, mode) {
     }
     if (normalizedMode === "early") {
       return compareNumbers(
-        b.scoreBreakdown.early - a.scoreBreakdown.early,
         b.scoreBreakdown.growth - a.scoreBreakdown.growth,
         b.scoreBreakdown.relativeGrowth - a.scoreBreakdown.relativeGrowth,
-        new Date(b.createdAt) - new Date(a.createdAt),
+        b.scoreBreakdown.freshness - a.scoreBreakdown.freshness,
+        b.opportunityScore - a.opportunityScore
+      );
+    }
+    if (normalizedMode === "discovery") {
+      return compareNumbers(
+        b.discoveryScore - a.discoveryScore,
+        b.scoreBreakdown.relativeGrowth - a.scoreBreakdown.relativeGrowth,
+        b.confidenceScore - a.confidenceScore,
         b.opportunityScore - a.opportunityScore
       );
     }
@@ -294,6 +459,8 @@ function rankItems(items, mode) {
 
     return compareNumbers(
       b.opportunityScore - a.opportunityScore,
+      b.discoveryScore - a.discoveryScore,
+      b.confidenceScore - a.confidenceScore,
       b.trendScore - a.trendScore,
       b.starDelta - a.starDelta,
       b.starsPerHour - a.starsPerHour,
@@ -400,6 +567,7 @@ export function getTrending({ windowHours = 24, language = "", group = "watch", 
     const createdHours = Math.max(1, hoursBetween(row.created_at, now));
     const observedStarsPerHour = observedHours > 0 ? starDelta / observedHours : 0;
     const estimatedStarsPerHour = row.stargazers_count / createdHours;
+    const relativeGrowth = row.stargazers_count > 0 ? starDelta / row.stargazers_count : 0;
     const coldStart = observedHours === 0;
     const baseItem = {
       id: row.id,
@@ -426,6 +594,7 @@ export function getTrending({ windowHours = 24, language = "", group = "watch", 
       starsPerHour: observedStarsPerHour,
       observedStarsPerHour,
       estimatedStarsPerHour,
+      relativeGrowth,
       trendScore: trendScore({
         starDelta,
         observedStarsPerHour,

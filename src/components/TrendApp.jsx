@@ -27,6 +27,7 @@ const windows = [
 ];
 const defaultRankingModes = [
   { id: "opportunity", name: "机会总榜" },
+  { id: "discovery", name: "发现榜" },
   { id: "breakout", name: "爆发榜" },
   { id: "early", name: "早期机会榜" },
   { id: "indie", name: "Indie Hacker 榜" },
@@ -107,10 +108,26 @@ function formatScore(value) {
   return Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
 }
 
-function useApi(path, deps) {
-  const [state, setState] = useState({ data: null, loading: true, error: "" });
+function confidenceLabel(score = 0) {
+  if (score >= 85) return "高可信";
+  if (score >= 60) return "可信";
+  if (score >= 40) return "观察";
+  return "低置信度";
+}
+
+function isReviewTag(tag) {
+  return tag === "需要复核" || tag === "社区信号偏弱" || tag === "增长异常" || tag === "快照不足" || tag === "低置信度";
+}
+
+function useApi(path, deps, enabled = true) {
+  const [state, setState] = useState({ data: null, loading: enabled, error: "" });
 
   useEffect(() => {
+    if (!enabled) {
+      setState({ data: null, loading: false, error: "" });
+      return undefined;
+    }
+
     const controller = new AbortController();
     setState((current) => ({ ...current, loading: true, error: "" }));
 
@@ -127,7 +144,7 @@ function useApi(path, deps) {
       });
 
     return () => controller.abort();
-  }, deps);
+  }, [...deps, enabled]);
 
   return state;
 }
@@ -276,7 +293,7 @@ function RepoRow({ repo, rank, onOpen }) {
   const domain = getRepoDomain(repo);
   const latestSnapshot = repo.lastSeen || repo.starHistory?.[repo.starHistory.length - 1]?.capturedAt;
   const opportunityTags = repo.opportunityTags || [];
-  const reasons = repo.opportunityReasons?.slice(0, 2) || [];
+  const reasons = repo.whyNow?.slice(0, 1) || repo.opportunityReasons?.slice(0, 1) || [];
 
   return (
     <article className="repo-row">
@@ -301,8 +318,10 @@ function RepoRow({ repo, rank, onOpen }) {
           ))}
         </div>
         <div className="opportunity-tags">
+          {repo.opportunityTier && <span className="tier">{repo.opportunityTier}</span>}
+          {Number.isFinite(Number(repo.confidenceScore)) && <span>{confidenceLabel(repo.confidenceScore)}</span>}
           {opportunityTags.map((tag) => (
-            <span key={tag} className={tag === "疑似刷星" ? "suspicious" : ""}>
+            <span key={tag} className={isReviewTag(tag) ? "review" : ""}>
               {tag}
             </span>
           ))}
@@ -318,12 +337,12 @@ function RepoRow({ repo, rank, onOpen }) {
         <div>
           <span>opportunity</span>
           <strong>{formatScore(repo.opportunityScore)}</strong>
-          <small>机会评分 / 100</small>
+          <small>{repo.opportunityTier || "机会评分"} / 100</small>
         </div>
         <div>
-          <span>velocity</span>
-          <b>{repoVelocityLabel(repo)}</b>
-          <small>{repoVelocityUnit(repo)}</small>
+          <span>discovery</span>
+          <b>{formatScore(repo.discoveryScore)}</b>
+          <small>{confidenceLabel(repo.confidenceScore)} {formatScore(repo.confidenceScore)}</small>
         </div>
         <button className="detail-button" onClick={() => onOpen(repo)}>
           <BarChart3 size={16} />
@@ -373,11 +392,13 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
     ["增长速度", "growth"],
     ["相对增长", "relativeGrowth"],
     ["新鲜度", "freshness"],
+    ["置信度", "confidence"],
+    ["发现分", "discovery"],
     ["可复用性", "cloneability"],
     ["变现相关", "monetization"],
     ["AI 机会", "aiOpportunity"],
     ["质量信号", "quality"],
-    ["可疑扣分", "suspiciousPenalty"]
+    ["复核扣分", "reviewPenalty"]
   ];
 
   return (
@@ -402,24 +423,24 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
 
         <div className="detail-summary">
           <div>
+            <span>机会层级</span>
+            <strong>{repo.opportunityTier || "观察"}</strong>
+          </div>
+          <div>
             <span>机会评分</span>
             <strong>{formatScore(repo.opportunityScore)}</strong>
           </div>
           <div>
-            <span>窗口</span>
-            <strong>{formatWindow(windowHours)}</strong>
+            <span>发现分</span>
+            <strong>{formatScore(repo.discoveryScore)}</strong>
           </div>
           <div>
-            <span>星速</span>
-            <strong>{repo.coldStart ? "待复测" : `${formatVelocity(repo.starsPerHour)}/h`}</strong>
+            <span>置信度</span>
+            <strong>{confidenceLabel(repo.confidenceScore)}</strong>
           </div>
           <div>
             <span>窗口增量</span>
             <strong>+{repo.starDelta}</strong>
-          </div>
-          <div>
-            <span>快照数</span>
-            <strong>{repo.snapshotCount || history.length}</strong>
           </div>
           <div>
             <span>数据源</span>
@@ -431,12 +452,21 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
           <div>
             <h3>为什么上榜</h3>
             <div className="opportunity-tags">
+              {repo.opportunityTier && <span className="tier">{repo.opportunityTier}</span>}
+              {Number.isFinite(Number(repo.confidenceScore)) && <span>{confidenceLabel(repo.confidenceScore)} {formatScore(repo.confidenceScore)}</span>}
               {(repo.opportunityTags || []).map((tag) => (
-                <span key={tag} className={tag === "疑似刷星" ? "suspicious" : ""}>
+                <span key={tag} className={isReviewTag(tag) ? "review" : ""}>
                   {tag}
                 </span>
               ))}
             </div>
+            <h3 className="subsection-title">为什么现在值得看</h3>
+            <ul className="reason-list">
+              {(repo.whyNow || []).map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+            <h3 className="subsection-title">补充原因</h3>
             <ul className="reason-list">
               {(repo.opportunityReasons || []).map((reason) => (
                 <li key={reason}>{reason}</li>
@@ -474,6 +504,8 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
             <h3>仓库状态</h3>
             <div className="detail-list">
               <div><span>当前 stars</span><strong>{formatFullNumber(repo.stars)}</strong></div>
+              <div><span>窗口</span><strong>{formatWindow(windowHours)}</strong></div>
+              <div><span>星速</span><strong>{repo.coldStart ? "待复测" : `${formatVelocity(repo.starsPerHour)}/h`}</strong></div>
               <div><span>最后 push</span><strong>{timeAgo(repo.pushedAt)}</strong></div>
               <div><span>快照</span><strong>{timeAgo(latestSnapshot)}</strong></div>
               <div><span>Forks</span><strong>{formatNumber(repo.forks)}</strong></div>
@@ -492,8 +524,8 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
             <div className="signal-chips">
               {(repo.monetizationSignals || []).map((signal) => <span key={`m-${signal}`}>变现：{signal}</span>)}
               {(repo.cloneabilitySignals || []).map((signal) => <span key={`c-${signal}`}>复用：{signal}</span>)}
-              {(repo.suspiciousSignals || []).map((signal) => <span className="suspicious" key={`s-${signal}`}>复核：{signal}</span>)}
-              {!repo.monetizationSignals?.length && !repo.cloneabilitySignals?.length && !repo.suspiciousSignals?.length && <span>暂无额外信号</span>}
+              {(repo.reviewSignals || []).map((signal) => <span className="review" key={`r-${signal.type}`}>{signal.label}</span>)}
+              {!repo.monetizationSignals?.length && !repo.cloneabilitySignals?.length && !repo.reviewSignals?.length && <span>暂无额外信号</span>}
             </div>
           </section>
         </div>
@@ -542,6 +574,8 @@ function Spotlight({ repo, windowHours }) {
         <div className="spotlight-tags">
           <span>{repo.language || "Unknown"}</span>
           <span>{formatWindow(windowHours)}窗口</span>
+          {repo.opportunityTier && <span>{repo.opportunityTier}</span>}
+          {Number.isFinite(Number(repo.confidenceScore)) && <span>{confidenceLabel(repo.confidenceScore)}</span>}
           {(repo.opportunityTags || []).slice(0, 3).map((tag) => (
             <span key={tag}>{tag}</span>
           ))}
@@ -549,9 +583,9 @@ function Spotlight({ repo, windowHours }) {
         </div>
       </div>
       <div className="spotlight-score">
-        <span>Opportunity score</span>
+        <span>{repo.opportunityTier || "Opportunity score"}</span>
         <strong>{formatScore(repo.opportunityScore)}</strong>
-        <small>{repoVelocityLabel(repo)} {repoVelocityUnit(repo)}</small>
+        <small>发现分 {formatScore(repo.discoveryScore)} · 置信度 {formatScore(repo.confidenceScore)}</small>
       </div>
     </section>
   );
@@ -631,6 +665,7 @@ function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
 }
 
 export default function TrendApp({ initialData = null }) {
+  const isStaticMode = import.meta.env.PROD || import.meta.env.PUBLIC_STATIC_MODE === "true";
   const [group, setGroup] = useState("watch");
   const [windowHours, setWindowHours] = useState(24);
   const [mode, setMode] = useState("opportunity");
@@ -650,16 +685,16 @@ export default function TrendApp({ initialData = null }) {
 
   const trendingPath = `/api/trending?group=${encodeURIComponent(group)}&windowHours=${windowHours}&mode=${encodeURIComponent(mode)}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
   const staticTrending = useStaticTrending(refreshTick, initialData);
-  const apiTrending = useApi(trendingPath, [group, windowHours, mode, language, refreshTick]);
-  const apiGroups = useApi("/api/groups", [refreshTick]);
-  const apiLanguages = useApi(`/api/languages?group=${encodeURIComponent(group)}`, [group, refreshTick]);
+  const apiTrending = useApi(trendingPath, [group, windowHours, mode, language, refreshTick], !isStaticMode);
+  const apiGroups = useApi("/api/groups", [refreshTick], !isStaticMode);
+  const apiLanguages = useApi(`/api/languages?group=${encodeURIComponent(group)}`, [group, refreshTick], !isStaticMode);
   const groups = apiGroups.data?.items || staticTrending.data?.groups || [{ id: "watch", name: "全部关注" }, { id: "global", name: "综合" }];
   const staticWindow = staticTrending.data?.groupWindows?.[group]?.[String(windowHours)] || (group === "watch" ? staticTrending.data?.windows?.[String(windowHours)] : null);
   const apiWindow = apiTrending.data || null;
-  const sourceData = apiWindow || staticWindow || apiTrending.data;
-  const sourceLabel = apiWindow ? "实时 API" : "静态快照";
-  const loading = staticTrending.loading && apiTrending.loading;
-  const error = staticTrending.error && apiTrending.error ? staticTrending.error : "";
+  const sourceData = isStaticMode ? staticWindow : apiWindow || staticWindow || apiTrending.data;
+  const sourceLabel = isStaticMode || !apiWindow ? "静态快照" : "实时 API";
+  const loading = isStaticMode ? staticTrending.loading : staticTrending.loading && apiTrending.loading;
+  const error = isStaticMode ? staticTrending.error : staticTrending.error && apiTrending.error ? staticTrending.error : "";
   const languages = apiLanguages.data?.items || staticTrending.data?.groupLanguages?.[group] || (group === "watch" ? staticTrending.data?.languages : []) || [];
   const generatedAt = sourceData?.generatedAt || staticTrending.data?.generatedAt;
   const refresh = staticTrending.data?.refresh;

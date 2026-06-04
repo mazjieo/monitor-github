@@ -8,6 +8,7 @@ export const config = {
   baselineMinStars: Number(process.env.BASELINE_MIN_STARS || process.env.MIN_STARS || 1000),
   discoveryMinStars: Number(process.env.DISCOVERY_MIN_STARS || 100),
   searchDelayMs: Number(process.env.GITHUB_SEARCH_DELAY_MS || 2200),
+  githubRequestTimeoutMs: Number(process.env.GITHUB_REQUEST_TIMEOUT_MS || 30000),
   activeWindowDays: Number(process.env.ACTIVE_WINDOW_DAYS || 7),
   recentWindowDays: Number(process.env.RECENT_WINDOW_DAYS || 30),
   searchLanguages: (process.env.SEARCH_LANGUAGES ||

@@ -630,11 +630,17 @@ select {
   font-weight: 760;
 }
 
-.opportunity-tags span.suspicious,
-.signal-chips span.suspicious {
-  color: #9f1239;
-  background: #ffe4e6;
-  border-color: #fecdd3;
+.opportunity-tags span.tier {
+  color: #14532d;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.opportunity-tags span.review,
+.signal-chips span.review {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
 }
 
 .repo-reasons {
@@ -945,6 +951,11 @@ select {
   margin: 0 0 12px;
   color: var(--ink);
   font-size: 16px;
+}
+
+.opportunity-panel .subsection-title {
+  margin-top: 16px;
+  font-size: 14px;
 }
 
 .reason-list {
