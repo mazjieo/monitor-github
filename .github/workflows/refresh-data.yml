@@ -9,7 +9,7 @@ on:
       - data/github-trends.sqlite
       - public/data/trending.json
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "*/30 * * * *"
 
 permissions:
   contents: write
@@ -41,7 +41,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MONITOR_GITHUB_TOKEN }}
           BASELINE_MIN_STARS: 1000
-          DISCOVERY_MIN_STARS: 1000
+          DISCOVERY_MIN_STARS: 100
           GITHUB_SEARCH_DELAY_MS: 2200
 
       - name: Commit data changes

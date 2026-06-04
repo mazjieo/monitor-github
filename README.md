@@ -1,13 +1,15 @@
-# GitHub Star Radar
+# 开源项目机会雷达
 
-一个用于监测 GitHub 上升星速度最快项目的 Astro + React 静态应用。
+一个面向独立开发者和程序员的 Astro + React 静态应用，用 GitHub star 快照、机会评分和可疑信号发现值得研究、复用、二开或变现的开源项目。
 
 ## 功能
 
 - 定时抓取 GitHub Search API 中近期活跃且有一定星标量的仓库
-- 默认只扫描和展示 `1000` stars 以上的仓库
+- 保留 `1000` stars 以上的热门基线扫描，同时把发现池下探到 `100` stars 捕捉早期项目
 - 保存每个仓库的星标快照，用观察窗口内的星标增量计算 `stars/hour`
-- 首次运行没有历史快照时，使用“创建以来平均星速”作为冷启动排序
+- 新增 `opportunityScore`、机会标签、上榜原因、变现信号、可抄作业信号和可疑降权信号
+- 提供机会总榜、爆发榜、早期机会榜、Indie Hacker 榜、可抄作业榜、AI / Agent / MCP 新项目榜
+- 首次运行没有历史快照时，标记为待复测，不因为冷启动直接剔除早期机会
 - 提供语言筛选、关键词搜索、观察窗口切换和手动刷新
 - 支持 GitHub Actions 定时刷新数据，并通过 GitHub Pages 静态展示
 - 使用 Astro 生成静态 HTML，React island 负责筛选、搜索和自动刷新
@@ -40,7 +42,8 @@ GitHub Pages -> public website
 GITHUB_TOKEN=ghp_xxx
 REFRESH_CRON=*/30 * * * *
 SNAPSHOT_WINDOW_HOURS=168
-MIN_STARS=1000
+BASELINE_MIN_STARS=1000
+DISCOVERY_MIN_STARS=100
 ```
 
 监控分组在 `config/groups.json` 中维护。新增分组时添加一个 `groups[]` 配置项即可，不需要改采集代码：
@@ -73,7 +76,7 @@ npm start
 
 这个仓库包含两个工作流：
 
-- `.github/workflows/refresh-data.yml`：每小时第 17 和 47 分钟刷新数据，提交 `data/github-trends.sqlite` 和 `public/data/trending.json`
+- `.github/workflows/refresh-data.yml`：每 30 分钟刷新数据，提交 `data/github-trends.sqlite` 和 `public/data/trending.json`
 - `.github/workflows/deploy-pages.yml`：每次推送到 `main` 后构建并部署 GitHub Pages
 
 你需要在 GitHub 仓库里配置 Secret：

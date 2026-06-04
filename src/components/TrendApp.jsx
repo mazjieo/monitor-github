@@ -25,6 +25,14 @@ const windows = [
   { label: "3d", value: 72 },
   { label: "7d", value: 168 }
 ];
+const defaultRankingModes = [
+  { id: "opportunity", name: "机会总榜" },
+  { id: "breakout", name: "爆发榜" },
+  { id: "early", name: "早期机会榜" },
+  { id: "indie", name: "Indie Hacker 榜" },
+  { id: "cloneable", name: "可抄作业榜" },
+  { id: "ai", name: "AI / Agent / MCP 新项目榜" }
+];
 const pageSize = 10;
 const autoRefreshMs = 5 * 60 * 1000;
 
@@ -89,6 +97,14 @@ function getRepoDomain(repo) {
   if (text.includes("devops") || text.includes("kubernetes") || text.includes("docker")) return "Infra";
   if (text.includes("security") || text.includes("auth") || text.includes("identity")) return "Security";
   return "Open Source";
+}
+
+function getRankingItems(sourceData, mode) {
+  return sourceData?.rankings?.[mode] || sourceData?.items || [];
+}
+
+function formatScore(value) {
+  return Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
 }
 
 function useApi(path, deps) {
@@ -259,6 +275,8 @@ function RepoRow({ repo, rank, onOpen }) {
   const topics = repo.topics?.slice(0, 4) || [];
   const domain = getRepoDomain(repo);
   const latestSnapshot = repo.lastSeen || repo.starHistory?.[repo.starHistory.length - 1]?.capturedAt;
+  const opportunityTags = repo.opportunityTags || [];
+  const reasons = repo.opportunityReasons?.slice(0, 2) || [];
 
   return (
     <article className="repo-row">
@@ -282,12 +300,29 @@ function RepoRow({ repo, rank, onOpen }) {
             <span key={topic}>{topic}</span>
           ))}
         </div>
+        <div className="opportunity-tags">
+          {opportunityTags.map((tag) => (
+            <span key={tag} className={tag === "疑似刷星" ? "suspicious" : ""}>
+              {tag}
+            </span>
+          ))}
+        </div>
+        <div className="repo-reasons">
+          {reasons.map((reason) => (
+            <span key={reason}>{reason}</span>
+          ))}
+        </div>
       </div>
 
       <div className="repo-score">
         <div>
+          <span>opportunity</span>
+          <strong>{formatScore(repo.opportunityScore)}</strong>
+          <small>机会评分 / 100</small>
+        </div>
+        <div>
           <span>velocity</span>
-          <strong>{repoVelocityLabel(repo)}</strong>
+          <b>{repoVelocityLabel(repo)}</b>
           <small>{repoVelocityUnit(repo)}</small>
         </div>
         <button className="detail-button" onClick={() => onOpen(repo)}>
@@ -332,15 +367,27 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
   const latestSnapshot = repo.lastSeen || history[history.length - 1]?.capturedAt;
   const firstSnapshot = repo.firstSeen || history[0]?.capturedAt;
   const topics = repo.topics || [];
+  const scoreBreakdown = repo.scoreBreakdown || {};
+  const breakdownRows = [
+    ["早期程度", "early"],
+    ["增长速度", "growth"],
+    ["相对增长", "relativeGrowth"],
+    ["新鲜度", "freshness"],
+    ["可复用性", "cloneability"],
+    ["变现相关", "monetization"],
+    ["AI 机会", "aiOpportunity"],
+    ["质量信号", "quality"],
+    ["可疑扣分", "suspiciousPenalty"]
+  ];
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <section className="repo-modal" role="dialog" aria-modal="true" aria-label={`${repo.fullName} 趋势详情`} onClick={(event) => event.stopPropagation()}>
+      <section className="repo-modal" role="dialog" aria-modal="true" aria-label={`${repo.fullName} 机会详情`} onClick={(event) => event.stopPropagation()}>
         <header className="modal-header">
           <div>
             <span className="section-kicker">
               <BarChart3 size={16} />
-              趋势详情
+              机会详情
             </span>
             <a className="modal-title" href={repo.url} target="_blank" rel="noreferrer">
               {repo.fullName}
@@ -354,6 +401,10 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
         </header>
 
         <div className="detail-summary">
+          <div>
+            <span>机会评分</span>
+            <strong>{formatScore(repo.opportunityScore)}</strong>
+          </div>
           <div>
             <span>窗口</span>
             <strong>{formatWindow(windowHours)}</strong>
@@ -371,14 +422,39 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
             <strong>{repo.snapshotCount || history.length}</strong>
           </div>
           <div>
-            <span>当前 stars</span>
-            <strong>{formatFullNumber(repo.stars)}</strong>
-          </div>
-          <div>
             <span>数据源</span>
             <strong>{sourceLabel}</strong>
           </div>
         </div>
+
+        <section className="opportunity-panel">
+          <div>
+            <h3>为什么上榜</h3>
+            <div className="opportunity-tags">
+              {(repo.opportunityTags || []).map((tag) => (
+                <span key={tag} className={tag === "疑似刷星" ? "suspicious" : ""}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <ul className="reason-list">
+              {(repo.opportunityReasons || []).map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3>Score Breakdown</h3>
+            <div className="breakdown-grid">
+              {breakdownRows.map(([label, key]) => (
+                <div key={key}>
+                  <span>{label}</span>
+                  <strong>{formatScore(scoreBreakdown[key])}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <div className="detail-chart-panel">
           <div className="chart-heading">
@@ -397,6 +473,7 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
           <section>
             <h3>仓库状态</h3>
             <div className="detail-list">
+              <div><span>当前 stars</span><strong>{formatFullNumber(repo.stars)}</strong></div>
               <div><span>最后 push</span><strong>{timeAgo(repo.pushedAt)}</strong></div>
               <div><span>快照</span><strong>{timeAgo(latestSnapshot)}</strong></div>
               <div><span>Forks</span><strong>{formatNumber(repo.forks)}</strong></div>
@@ -408,6 +485,15 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
             <h3>Topics</h3>
             <div className="topics">
               {topics.length ? topics.map((topic) => <span key={topic}>{topic}</span>) : <span>暂无 topic</span>}
+            </div>
+          </section>
+          <section>
+            <h3>机会信号</h3>
+            <div className="signal-chips">
+              {(repo.monetizationSignals || []).map((signal) => <span key={`m-${signal}`}>变现：{signal}</span>)}
+              {(repo.cloneabilitySignals || []).map((signal) => <span key={`c-${signal}`}>复用：{signal}</span>)}
+              {(repo.suspiciousSignals || []).map((signal) => <span className="suspicious" key={`s-${signal}`}>复核：{signal}</span>)}
+              {!repo.monetizationSignals?.length && !repo.cloneabilitySignals?.length && !repo.suspiciousSignals?.length && <span>暂无额外信号</span>}
             </div>
           </section>
         </div>
@@ -456,13 +542,16 @@ function Spotlight({ repo, windowHours }) {
         <div className="spotlight-tags">
           <span>{repo.language || "Unknown"}</span>
           <span>{formatWindow(windowHours)}窗口</span>
-          <span>{repo.coldStart ? "估算趋势" : "真实快照"}</span>
+          {(repo.opportunityTags || []).slice(0, 3).map((tag) => (
+            <span key={tag}>{tag}</span>
+          ))}
+          <span>{repo.coldStart ? "待复测" : "真实快照"}</span>
         </div>
       </div>
       <div className="spotlight-score">
-        <span>Star velocity</span>
-        <strong>{repoVelocityLabel(repo)}</strong>
-        <small>{repoVelocityUnit(repo)}</small>
+        <span>Opportunity score</span>
+        <strong>{formatScore(repo.opportunityScore)}</strong>
+        <small>{repoVelocityLabel(repo)} {repoVelocityUnit(repo)}</small>
       </div>
     </section>
   );
@@ -483,16 +572,16 @@ function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
   }, [items]);
 
   return (
-    <aside className="insights" aria-label="趋势洞察">
+    <aside className="insights" aria-label="机会洞察">
       <section className="insight-panel">
         <div className="panel-title">
           <Sparkles size={17} />
-          <h2>趋势切片</h2>
+          <h2>机会切片</h2>
         </div>
         <div className="signal-list">
           <div>
             <strong>{sourceData?.minStars || refresh?.minStars || 1000}+</strong>
-            <span>最低星标门槛</span>
+            <span>发现池门槛</span>
           </div>
           <div>
             <strong>{refresh?.candidates || items.length}</strong>
@@ -544,6 +633,7 @@ function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
 export default function TrendApp({ initialData = null }) {
   const [group, setGroup] = useState("watch");
   const [windowHours, setWindowHours] = useState(24);
+  const [mode, setMode] = useState("opportunity");
   const [language, setLanguage] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -558,9 +648,9 @@ export default function TrendApp({ initialData = null }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const trendingPath = `/api/trending?group=${encodeURIComponent(group)}&windowHours=${windowHours}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
+  const trendingPath = `/api/trending?group=${encodeURIComponent(group)}&windowHours=${windowHours}&mode=${encodeURIComponent(mode)}&language=${encodeURIComponent(language)}&limit=80&t=${refreshTick}`;
   const staticTrending = useStaticTrending(refreshTick, initialData);
-  const apiTrending = useApi(trendingPath, [group, windowHours, language, refreshTick]);
+  const apiTrending = useApi(trendingPath, [group, windowHours, mode, language, refreshTick]);
   const apiGroups = useApi("/api/groups", [refreshTick]);
   const apiLanguages = useApi(`/api/languages?group=${encodeURIComponent(group)}`, [group, refreshTick]);
   const groups = apiGroups.data?.items || staticTrending.data?.groups || [{ id: "watch", name: "全部关注" }, { id: "global", name: "综合" }];
@@ -573,9 +663,11 @@ export default function TrendApp({ initialData = null }) {
   const languages = apiLanguages.data?.items || staticTrending.data?.groupLanguages?.[group] || (group === "watch" ? staticTrending.data?.languages : []) || [];
   const generatedAt = sourceData?.generatedAt || staticTrending.data?.generatedAt;
   const refresh = staticTrending.data?.refresh;
+  const rankingModes = sourceData?.rankingModes || staticTrending.data?.rankingModes || defaultRankingModes;
+  const sourceItems = getRankingItems(sourceData, mode);
 
   const items = useMemo(() => {
-    const repos = sourceData?.items || [];
+    const repos = sourceItems;
     const byLanguage = language ? repos.filter((repo) => repo.language?.toLowerCase() === language.toLowerCase()) : repos;
     if (!query.trim()) return byLanguage;
     const needle = query.trim().toLowerCase();
@@ -586,11 +678,11 @@ export default function TrendApp({ initialData = null }) {
         (repo.topics || []).some((topic) => topic.toLowerCase().includes(needle))
       );
     });
-  }, [sourceData, language, query]);
+  }, [sourceItems, language, query]);
 
   useEffect(() => {
     setPage(1);
-  }, [group, windowHours, language, query]);
+  }, [group, windowHours, mode, language, query]);
 
   useEffect(() => {
     setLanguage("");
@@ -614,31 +706,35 @@ export default function TrendApp({ initialData = null }) {
   const pageItems = items.slice(pageStart, pageEnd);
 
   const totals = useMemo(() => {
-    const repos = sourceData?.items || [];
+    const repos = sourceItems;
     const visibleRepos = language ? repos.filter((repo) => repo.language?.toLowerCase() === language.toLowerCase()) : repos;
     const observed = visibleRepos.filter((repo) => !repo.coldStart).length;
     const top = visibleRepos[0];
     const topObserved = visibleRepos.find((repo) => !repo.coldStart);
     const totalStars = visibleRepos.reduce((sum, repo) => sum + (repo.stars || 0), 0);
+    const averageOpportunity = visibleRepos.length
+      ? Math.round(visibleRepos.reduce((sum, repo) => sum + (repo.opportunityScore || 0), 0) / visibleRepos.length)
+      : 0;
     return {
       count: visibleRepos.length,
       observed,
+      averageOpportunity,
       topVelocity: topObserved ? `${formatVelocity(topObserved.starsPerHour)}/h` : "待复测",
       topDelta: top ? `+${top.starDelta}` : "+0",
       totalStars: formatNumber(totalStars)
     };
-  }, [sourceData, language]);
+  }, [sourceItems, language]);
 
   return (
     <>
       <section className="signal-bar" aria-label="数据状态">
         <div>
           <BadgeCheck size={18} />
-          <span>多策略候选池，1000+ stars 起采样</span>
+          <span>100+ stars 发现池，保留 1000+ 热门基线</span>
         </div>
         <div>
           <RefreshCw size={18} />
-          <span>每 5 分钟检测静态数据更新</span>
+          <span>机会评分综合增长、复用、变现、AI 与可疑信号</span>
         </div>
         <div>
           <GitBranch size={18} />
@@ -648,11 +744,11 @@ export default function TrendApp({ initialData = null }) {
 
       <Spotlight repo={items[0]} windowHours={windowHours} />
 
-      <section className="stats" aria-label="趋势统计">
-        <Stat icon={Code2} label="候选项目" value={totals.count} hint={`${totals.observed} 个真实快照`} tone="tone-blue" />
-        <Stat icon={Zap} label="最高星速" value={totals.topVelocity} hint={formatWindow(windowHours)} tone="tone-gold" />
+      <section className="stats" aria-label="机会统计">
+        <Stat icon={Code2} label="机会项目" value={totals.count} hint={`${totals.observed} 个真实快照`} tone="tone-blue" />
+        <Stat icon={Sparkles} label="平均机会分" value={totals.averageOpportunity} hint="当前榜单" tone="tone-gold" />
         <Stat icon={Star} label="榜首增量" value={totals.topDelta} hint="窗口内新增" tone="tone-green" />
-        <Stat icon={BarChart3} label="总星标量" value={totals.totalStars} hint="当前筛选合集" tone="tone-purple" />
+        <Stat icon={Zap} label="最高星速" value={totals.topVelocity} hint={formatWindow(windowHours)} tone="tone-purple" />
         <Stat icon={ShieldCheck} label="数据更新" value={formatGeneratedAt(generatedAt)} hint="静态快照" tone="tone-gray" />
       </section>
 
@@ -665,6 +761,13 @@ export default function TrendApp({ initialData = null }) {
       </section>
 
       <section className="toolbar" aria-label="筛选和搜索">
+        <div className="mode-tabs" role="group" aria-label="选择榜单模式">
+          {rankingModes.map((item) => (
+            <button key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setMode(item.id)}>
+              {item.name}
+            </button>
+          ))}
+        </div>
         <div className="search">
           <Search size={18} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索仓库、描述或 topic" />
@@ -701,18 +804,18 @@ export default function TrendApp({ initialData = null }) {
       )}
 
       <div className="workspace">
-        <section className="list-shell" aria-label="GitHub 升星项目列表">
+        <section className="list-shell" aria-label="开源项目机会列表">
           <div className="list-header">
             <div>
-              <span>Trending Repositories</span>
-              <h2>正在加速的开源项目</h2>
+              <span>Opportunity Repositories</span>
+              <h2>值得研究的开源项目机会</h2>
             </div>
             <strong>{items.length ? `${pageStart + 1}-${pageEnd} / ${items.length}` : "0 repos"}</strong>
           </div>
           <div className="list">
             {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
             {!loading && pageItems.map((repo, index) => <RepoRow repo={repo} rank={pageStart + index + 1} key={repo.id} onOpen={setSelectedRepo} />)}
-            {!loading && !items.length && <div className="empty">还没有匹配的仓库。换个时间窗口或语言试试。</div>}
+            {!loading && !items.length && <div className="empty">这个榜单暂时没有匹配的仓库。换个时间窗口、语言或榜单试试。</div>}
           </div>
           {!loading && items.length > pageSize && (
             <nav className="pagination" aria-label="Repository pagination">

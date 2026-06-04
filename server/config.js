@@ -6,7 +6,7 @@ export const config = {
   refreshCron: process.env.REFRESH_CRON || "*/30 * * * *",
   snapshotWindowHours: Number(process.env.SNAPSHOT_WINDOW_HOURS || 168),
   baselineMinStars: Number(process.env.BASELINE_MIN_STARS || process.env.MIN_STARS || 1000),
-  discoveryMinStars: Number(process.env.DISCOVERY_MIN_STARS || process.env.MIN_STARS || 1000),
+  discoveryMinStars: Number(process.env.DISCOVERY_MIN_STARS || 100),
   searchDelayMs: Number(process.env.GITHUB_SEARCH_DELAY_MS || 2200),
   activeWindowDays: Number(process.env.ACTIVE_WINDOW_DAYS || 7),
   recentWindowDays: Number(process.env.RECENT_WINDOW_DAYS || 30),
@@ -15,7 +15,10 @@ export const config = {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean),
-  searchTopics: (process.env.SEARCH_TOPICS || "ai,llm,agent,rag,mcp,cli")
+  searchTopics: (
+    process.env.SEARCH_TOPICS ||
+    "ai,llm,agent,rag,mcp,workflow,embedding,inference,saas,boilerplate,starter,template,stripe,auth,directory,seo,waitlist,newsletter,nextjs,react,tailwind,shadcn,dashboard,admin,ui"
+  )
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)

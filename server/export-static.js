@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { db } from "./db.js";
-import { getLanguages, getTrending, getTrendGroups } from "./trending.js";
+import { getLanguages, getTrending, getTrendGroups, rankingModes } from "./trending.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -33,6 +33,7 @@ export function exportStaticData(refreshResult = null) {
     generatedAt: new Date().toISOString(),
     refresh: refreshResult,
     groups,
+    rankingModes,
     languages: getLanguages({ group: "watch" }),
     groupLanguages: Object.fromEntries(groups.map((group) => [group.id, getLanguages({ group: group.id })])),
     groupWindows,
@@ -46,6 +47,7 @@ export function exportStaticData(refreshResult = null) {
     outputFile,
     groups: groups.length,
     windows: windows.length,
+    rankingModes: rankingModes.length,
     languages: payload.languages.length
   };
 }

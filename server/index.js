@@ -57,6 +57,7 @@ app.get("/api/trending", (request, response) => {
       windowHours: request.query.windowHours,
       language: request.query.language,
       group: request.query.group,
+      mode: request.query.mode,
       limit: request.query.limit
     })
   );
@@ -83,7 +84,7 @@ cron.schedule(config.refreshCron, () => {
 });
 
 app.listen(config.port, () => {
-  console.log(`GitHub Star Radar API listening on http://127.0.0.1:${config.port}`);
+  console.log(`Open Source Opportunity Radar API listening on http://127.0.0.1:${config.port}`);
   runRefresh().catch((error) => {
     console.error(`[initial refresh] ${error.message}`);
   });

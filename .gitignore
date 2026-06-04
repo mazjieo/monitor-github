@@ -1,13 +1,42 @@
 node_modules/
 dist/
 .astro/
+
+# Build and tooling caches
+.vite/
+coverage/
+
 /data/*
 !/data/
 !/data/github-trends.sqlite
+
+# SQLite sidecars and local recovery files
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite-journal
+*.sqlite.corrupt
+*.sqlite.bak
+
+# Local environment
 .env
+.env.*
+!.env.example
+
+# Local editor and assistant workspaces
 .idea/
+.vscode/
+.cursor/
+.claude/
+.codex/
+.agents/
+.trellis/
+AGENTS.md
+
+# OS and logs
 .DS_Store
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 dev-server*.log
+preview-server.log

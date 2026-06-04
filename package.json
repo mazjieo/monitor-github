@@ -1,7 +1,7 @@
 {
   "name": "monitor-github",
   "version": "1.0.0",
-  "description": "Monitor fastest rising GitHub repositories and show their star velocity.",
+  "description": "Open source project opportunity radar for indie developers and programmers.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
