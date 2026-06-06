@@ -4,17 +4,23 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BarChart3,
+  BookmarkPlus,
   Clock3,
   Code2,
+  Copy,
+  EyeOff,
   Filter,
   GitBranch,
   GitFork,
+  ListChecks,
   Radio,
   RefreshCw,
+  RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
   Star,
+  Trash2,
   X,
   Zap
 } from "lucide-react";
@@ -36,6 +42,12 @@ const defaultRankingModes = [
 ];
 const pageSize = 10;
 const autoRefreshMs = 5 * 60 * 1000;
+const ignoredStorageKey = "ignoredRepos";
+const researchQueueStorageKey = "researchQueue";
+const personalTabs = [
+  { id: "research", name: "研究队列" },
+  { id: "ignored", name: "已忽略" }
+];
 
 const numberFmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 const fullNumberFmt = new Intl.NumberFormat("en");
@@ -117,6 +129,127 @@ function confidenceLabel(score = 0) {
 
 function isReviewTag(tag) {
   return tag === "需要复核" || tag === "社区信号偏弱" || tag === "增长异常" || tag === "快照不足" || tag === "低置信度";
+}
+
+function repoStorageId(repo) {
+  return String(repo?.repoId ?? repo?.id ?? repo?.fullName ?? "");
+}
+
+function normalizeStoredRepos(value) {
+  return Array.isArray(value)
+    ? value.filter((item) => item && (item.repoId || item.fullName)).map((item) => ({ ...item, repoId: item.repoId ?? item.fullName }))
+    : [];
+}
+
+function readStoredRepos(key) {
+  if (typeof window === "undefined") return [];
+  try {
+    return normalizeStoredRepos(JSON.parse(window.localStorage.getItem(key) || "[]"));
+  } catch {
+    return [];
+  }
+}
+
+function useStoredRepoList(key) {
+  const [items, setItems] = useState([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setItems(readStoredRepos(key));
+    setReady(true);
+  }, [key]);
+
+  useEffect(() => {
+    if (!ready || typeof window === "undefined") return;
+    window.localStorage.setItem(key, JSON.stringify(items));
+  }, [items, key, ready]);
+
+  return [items, setItems];
+}
+
+function createRepoMap(repos) {
+  const map = new Map();
+  repos.forEach((repo) => {
+    const key = repoStorageId(repo);
+    if (key && !map.has(key)) map.set(key, repo);
+  });
+  return map;
+}
+
+function getAllRankingRepos(sourceData) {
+  const rankings = sourceData?.rankings || {};
+  const repos = Object.values(rankings).flat();
+  return repos.length ? repos : sourceData?.items || [];
+}
+
+function buildAnalysisPrompt(repo) {
+  return `请分析这个 GitHub 项目：
+
+${repo.url}
+
+重点关注：
+
+1. 项目解决什么问题
+2. 是否有商业化机会
+3. 是否适合独立开发者
+4. 是否适合 SaaS 化
+5. 是否值得二开
+6. 技术亮点
+7. 风险与缺点
+
+最后给出：
+
+- 是否值得 Star
+- 是否值得持续关注`;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back to a temporary textarea below when browser permissions block clipboard.writeText.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) throw new Error("copy failed");
+}
+
+function countTags(entries, repoMap) {
+  const counts = new Map();
+  entries.forEach((entry) => {
+    const repo = repoMap.get(repoStorageId(entry));
+    (repo?.opportunityTags || []).forEach((tag) => {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    });
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 6);
+}
+
+function entryMatchesFilters(entry, repo, language, query) {
+  if (language && repo?.language?.toLowerCase() !== language.toLowerCase()) return false;
+  if (!query.trim()) return true;
+
+  const needle = query.trim().toLowerCase();
+  return (
+    String(repo?.fullName || entry.fullName || "").toLowerCase().includes(needle) ||
+    String(repo?.description || "").toLowerCase().includes(needle) ||
+    (repo?.topics || []).some((topic) => topic.toLowerCase().includes(needle))
+  );
 }
 
 function useApi(path, deps, enabled = true) {
@@ -288,7 +421,7 @@ function StarTimeChart({ points = [] }) {
   );
 }
 
-function RepoRow({ repo, rank, onOpen }) {
+function RepoRow({ repo, rank, onOpen, onAddResearch, onAnalyze, onIgnore, isQueued }) {
   const topics = repo.topics?.slice(0, 4) || [];
   const domain = getRepoDomain(repo);
   const latestSnapshot = repo.lastSeen || repo.starHistory?.[repo.starHistory.length - 1]?.capturedAt;
@@ -344,10 +477,24 @@ function RepoRow({ repo, rank, onOpen }) {
           <b>{formatScore(repo.discoveryScore)}</b>
           <small>{confidenceLabel(repo.confidenceScore)} {formatScore(repo.confidenceScore)}</small>
         </div>
-        <button className="detail-button" onClick={() => onOpen(repo)}>
-          <BarChart3 size={16} />
-          详情
-        </button>
+        <div className="repo-actions">
+          <button className="detail-button" onClick={() => onOpen(repo)}>
+            <BarChart3 size={16} />
+            详情
+          </button>
+          <button className="detail-button research-action" onClick={() => onAddResearch(repo)} disabled={isQueued}>
+            <BookmarkPlus size={16} />
+            {isQueued ? "已在队列" : "加入研究队列"}
+          </button>
+          <button className="detail-button analyze-action" onClick={() => onAnalyze(repo)}>
+            <Copy size={16} />
+            分析
+          </button>
+          <button className="detail-button ignore-action" onClick={() => onIgnore(repo)}>
+            <EyeOff size={16} />
+            忽略
+          </button>
+        </div>
       </div>
 
       <div className="repo-metrics">
@@ -379,7 +526,7 @@ function RepoRow({ repo, rank, onOpen }) {
   );
 }
 
-function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose }) {
+function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose, onAddResearch, onAnalyze, onIgnore, isQueued }) {
   if (!repo) return null;
 
   const history = [...(repo.starHistory || [])].sort((a, b) => new Date(a.capturedAt) - new Date(b.capturedAt));
@@ -446,6 +593,21 @@ function RepoDetailModal({ repo, windowHours, generatedAt, sourceLabel, onClose 
             <span>数据源</span>
             <strong>{sourceLabel}</strong>
           </div>
+        </div>
+
+        <div className="modal-actions">
+          <button className="detail-button research-action" onClick={() => onAddResearch(repo)} disabled={isQueued}>
+            <BookmarkPlus size={16} />
+            {isQueued ? "已在研究队列" : "加入研究队列"}
+          </button>
+          <button className="detail-button analyze-action" onClick={() => onAnalyze(repo)}>
+            <Copy size={16} />
+            复制分析 Prompt
+          </button>
+          <button className="detail-button ignore-action" onClick={() => onIgnore(repo)}>
+            <EyeOff size={16} />
+            忽略
+          </button>
         </div>
 
         <section className="opportunity-panel">
@@ -591,7 +753,175 @@ function Spotlight({ repo, windowHours }) {
   );
 }
 
-function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
+function TodayWorthResearch({ items, onAddResearch, onAnalyze, onIgnore, queuedIds }) {
+  return (
+    <section className="today-panel" aria-label="今日值得研究">
+      <div className="today-header">
+        <div>
+          <span className="section-kicker">
+            <ListChecks size={16} />
+            Today Worth Research
+          </span>
+          <h2>今日值得研究</h2>
+        </div>
+        <strong>{items.length} repos</strong>
+      </div>
+      {items.length ? (
+        <div className="today-grid">
+          {items.map((repo) => {
+            const isQueued = queuedIds.has(repoStorageId(repo));
+            return (
+              <article className="today-card" key={repo.id}>
+                <a href={repo.url} target="_blank" rel="noreferrer">
+                  {repo.fullName}
+                  <ArrowUpRight size={14} />
+                </a>
+                <p>{repo.whyNow?.[0] || repo.opportunityReasons?.[0] || "值得花 10 分钟快速研究。"}</p>
+                <div className="today-metrics">
+                  <span>{repo.opportunityTier || "机会"}</span>
+                  <span>机会 {formatScore(repo.opportunityScore)}</span>
+                  <span>发现 {formatScore(repo.discoveryScore)}</span>
+                  <span>{confidenceLabel(repo.confidenceScore)}</span>
+                </div>
+                <div className="today-actions">
+                  <button onClick={() => onAddResearch(repo)} disabled={isQueued}>
+                    <BookmarkPlus size={15} />
+                    {isQueued ? "已在队列" : "加入队列"}
+                  </button>
+                  <button onClick={() => onAnalyze(repo)}>
+                    <Copy size={15} />
+                    分析
+                  </button>
+                  <button onClick={() => onIgnore(repo)}>
+                    <EyeOff size={15} />
+                    忽略
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="empty today-empty">今天没有新的高置信 S/A 级候选，先处理研究队列或换个分组看看。</div>
+      )}
+    </section>
+  );
+}
+
+function PersonalRepoList({ type, entries, repoMap, onRemoveResearch, onRestoreIgnored, onAnalyze, onOpen }) {
+  if (!entries.length) {
+    return (
+      <div className="empty personal-empty">
+        {type === "research" ? "研究队列还是空的。看到值得研究的项目时点“加入研究队列”。" : "还没有忽略项目。"}
+      </div>
+    );
+  }
+
+  return (
+    <div className="personal-list">
+      {entries.map(({ entry, repo }) => {
+        const title = repo?.fullName || entry.fullName || entry.repoId;
+        const date = entry.addedAt || entry.ignoredAt;
+        return (
+          <article className="personal-row" key={repoStorageId(entry)}>
+            <div className="personal-main">
+              {repo?.url ? (
+                <a href={repo.url} target="_blank" rel="noreferrer">
+                  {title}
+                  <ArrowUpRight size={14} />
+                </a>
+              ) : (
+                <strong>{title}</strong>
+              )}
+              <p>{repo?.description || (type === "research" ? "这个项目暂时不在当前数据窗口内，保留在队列中待后续复查。" : "已从榜单隐藏，可随时恢复。")}</p>
+              <div className="opportunity-tags">
+                {(repo?.opportunityTags || []).slice(0, 4).map((tag) => (
+                  <span key={tag} className={isReviewTag(tag) ? "review" : ""}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="personal-meta">
+              <span>{type === "research" ? "加入时间" : "忽略时间"}</span>
+              <strong>{timeAgo(date)}</strong>
+              <small>机会 {formatScore(repo?.opportunityScore ?? entry.opportunityScore)}</small>
+              <small>发现 {formatScore(repo?.discoveryScore ?? entry.discoveryScore)}</small>
+              <small>{confidenceLabel(repo?.confidenceScore ?? entry.confidenceScore)} {formatScore(repo?.confidenceScore ?? entry.confidenceScore)}</small>
+            </div>
+            <div className="personal-actions">
+              {repo && (
+                <button onClick={() => onOpen(repo)}>
+                  <BarChart3 size={15} />
+                  详情
+                </button>
+              )}
+              {repo?.url && (
+                <button onClick={() => onAnalyze(repo)}>
+                  <Copy size={15} />
+                  分析
+                </button>
+              )}
+              {type === "research" ? (
+                <button className="danger" onClick={() => onRemoveResearch(entry.repoId)}>
+                  <Trash2 size={15} />
+                  移除
+                </button>
+              ) : (
+                <button onClick={() => onRestoreIgnored(entry.repoId)}>
+                  <RotateCcw size={15} />
+                  恢复
+                </button>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function PersonalInsights({ insights }) {
+  return (
+    <section className="insight-panel">
+      <div className="panel-title">
+        <ListChecks size={17} />
+        <h2>Personal Insights</h2>
+      </div>
+      <div className="personal-insights">
+        <div>
+          <strong>最常收藏标签</strong>
+          <div className="topic-cloud">
+            {insights.researchTags.length ? insights.researchTags.map(([tag, count]) => (
+              <span key={tag}>
+                {tag}
+                <b>{count}</b>
+              </span>
+            )) : <span>暂无收藏行为</span>}
+          </div>
+        </div>
+        <div>
+          <strong>最常忽略标签</strong>
+          <div className="topic-cloud">
+            {insights.ignoredTags.length ? insights.ignoredTags.map(([tag, count]) => (
+              <span key={tag}>
+                {tag}
+                <b>{count}</b>
+              </span>
+            )) : <span>暂无忽略行为</span>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  return <div className={`toast ${toast.type || ""}`}>{toast.message}</div>;
+}
+
+function InsightsPanel({ items, languages, generatedAt, sourceData, refresh, personalInsights }) {
   const topLanguages = languages.slice(0, 8);
   const hotTopics = useMemo(() => {
     const counts = new Map();
@@ -660,6 +990,8 @@ function InsightsPanel({ items, languages, generatedAt, sourceData, refresh }) {
           ))}
         </div>
       </section>
+
+      <PersonalInsights insights={personalInsights} />
     </aside>
   );
 }
@@ -669,11 +1001,15 @@ export default function TrendApp({ initialData = null }) {
   const [group, setGroup] = useState("watch");
   const [windowHours, setWindowHours] = useState(24);
   const [mode, setMode] = useState("opportunity");
+  const [activeView, setActiveView] = useState("opportunity");
   const [language, setLanguage] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [refreshTick, setRefreshTick] = useState(0);
   const [selectedRepo, setSelectedRepo] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [ignoredRepos, setIgnoredRepos] = useStoredRepoList(ignoredStorageKey);
+  const [researchQueue, setResearchQueue] = useStoredRepoList(researchQueueStorageKey);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -699,7 +1035,83 @@ export default function TrendApp({ initialData = null }) {
   const generatedAt = sourceData?.generatedAt || staticTrending.data?.generatedAt;
   const refresh = staticTrending.data?.refresh;
   const rankingModes = sourceData?.rankingModes || staticTrending.data?.rankingModes || defaultRankingModes;
-  const sourceItems = getRankingItems(sourceData, mode);
+  const rawSourceItems = getRankingItems(sourceData, mode);
+  const allCurrentRepos = useMemo(() => getAllRankingRepos(sourceData), [sourceData]);
+  const repoMap = useMemo(() => createRepoMap(allCurrentRepos), [allCurrentRepos]);
+  const ignoredIds = useMemo(() => new Set(ignoredRepos.map((repo) => repoStorageId(repo))), [ignoredRepos]);
+  const queuedIds = useMemo(() => new Set(researchQueue.map((repo) => repoStorageId(repo))), [researchQueue]);
+  const sourceItems = useMemo(() => rawSourceItems.filter((repo) => !ignoredIds.has(repoStorageId(repo))), [rawSourceItems, ignoredIds]);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type, id: Date.now() });
+  };
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const handleAnalyzeRepo = async (repo) => {
+    if (!repo?.url) {
+      showToast("当前数据缺少仓库 URL，无法复制分析 Prompt", "error");
+      return;
+    }
+    try {
+      await copyText(buildAnalysisPrompt(repo));
+      showToast("已复制分析 Prompt");
+    } catch {
+      showToast("复制失败，请手动复制", "error");
+    }
+  };
+
+  const handleAddResearch = (repo) => {
+    const repoId = repoStorageId(repo);
+    setResearchQueue((current) => {
+      if (current.some((item) => repoStorageId(item) === repoId)) return current;
+      return [
+        {
+          repoId: repo.id,
+          fullName: repo.fullName,
+          addedAt: new Date().toISOString(),
+          opportunityScore: repo.opportunityScore,
+          discoveryScore: repo.discoveryScore,
+          confidenceScore: repo.confidenceScore
+        },
+        ...current
+      ];
+    });
+    showToast("已加入研究队列");
+  };
+
+  const handleRemoveResearch = (repoId) => {
+    const key = String(repoId);
+    setResearchQueue((current) => current.filter((item) => repoStorageId(item) !== key));
+    showToast("已从研究队列移除");
+  };
+
+  const handleIgnoreRepo = (repo) => {
+    const repoId = repoStorageId(repo);
+    setIgnoredRepos((current) => {
+      if (current.some((item) => repoStorageId(item) === repoId)) return current;
+      return [
+        {
+          repoId: repo.id,
+          fullName: repo.fullName,
+          ignoredAt: new Date().toISOString()
+        },
+        ...current
+      ];
+    });
+    if (selectedRepo && repoStorageId(selectedRepo) === repoId) setSelectedRepo(null);
+    showToast("已忽略该仓库");
+  };
+
+  const handleRestoreIgnored = (repoId) => {
+    const key = String(repoId);
+    setIgnoredRepos((current) => current.filter((item) => repoStorageId(item) !== key));
+    showToast("已恢复显示");
+  };
 
   const items = useMemo(() => {
     const repos = sourceItems;
@@ -715,9 +1127,44 @@ export default function TrendApp({ initialData = null }) {
     });
   }, [sourceItems, language, query]);
 
+  const researchEntries = useMemo(() => {
+    return researchQueue
+      .map((entry) => ({ entry, repo: repoMap.get(repoStorageId(entry)) }))
+      .filter(({ entry, repo }) => entryMatchesFilters(entry, repo, language, query))
+      .sort((a, b) => new Date(b.entry.addedAt || 0) - new Date(a.entry.addedAt || 0));
+  }, [researchQueue, repoMap, language, query]);
+
+  const ignoredEntries = useMemo(() => {
+    return ignoredRepos
+      .map((entry) => ({ entry, repo: repoMap.get(repoStorageId(entry)) }))
+      .filter(({ entry, repo }) => entryMatchesFilters(entry, repo, language, query))
+      .sort((a, b) => new Date(b.entry.ignoredAt || 0) - new Date(a.entry.ignoredAt || 0));
+  }, [ignoredRepos, repoMap, language, query]);
+
+  const todayItems = useMemo(() => {
+    return getRankingItems(sourceData, "opportunity")
+      .filter((repo) => {
+        const repoId = repoStorageId(repo);
+        return (
+          (repo.opportunityTier === "S级机会" || repo.opportunityTier === "A级机会") &&
+          Number(repo.confidenceScore) >= 60 &&
+          !ignoredIds.has(repoId) &&
+          !queuedIds.has(repoId) &&
+          (!language || repo.language?.toLowerCase() === language.toLowerCase())
+        );
+      })
+      .sort((a, b) => (b.opportunityScore || 0) - (a.opportunityScore || 0))
+      .slice(0, 10);
+  }, [sourceData, language, ignoredIds, queuedIds]);
+
+  const personalInsights = useMemo(() => ({
+    researchTags: countTags(researchQueue, repoMap),
+    ignoredTags: countTags(ignoredRepos, repoMap)
+  }), [researchQueue, ignoredRepos, repoMap]);
+
   useEffect(() => {
     setPage(1);
-  }, [group, windowHours, mode, language, query]);
+  }, [group, windowHours, mode, activeView, language, query, researchQueue.length, ignoredRepos.length]);
 
   useEffect(() => {
     setLanguage("");
@@ -734,11 +1181,18 @@ export default function TrendApp({ initialData = null }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedRepo]);
 
-  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const isResearchView = activeView === "research";
+  const isIgnoredView = activeView === "ignored";
+  const isPersonalView = isResearchView || isIgnoredView;
+  const personalEntries = isResearchView ? researchEntries : ignoredEntries;
+  const listCount = isPersonalView ? personalEntries.length : items.length;
+  const pageCount = Math.max(1, Math.ceil(listCount / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const pageStart = items.length ? (currentPage - 1) * pageSize : 0;
-  const pageEnd = Math.min(pageStart + pageSize, items.length);
-  const pageItems = items.slice(pageStart, pageEnd);
+  const pageStart = listCount ? (currentPage - 1) * pageSize : 0;
+  const pageEnd = Math.min(pageStart + pageSize, listCount);
+  const pageItems = isPersonalView ? personalEntries.slice(pageStart, pageEnd) : items.slice(pageStart, pageEnd);
+  const listEyebrow = isResearchView ? "Research Queue" : isIgnoredView ? "Ignored Repositories" : "Opportunity Repositories";
+  const listTitle = isResearchView ? "待研究项目队列" : isIgnoredView ? "已忽略项目" : "值得研究的开源项目机会";
 
   const totals = useMemo(() => {
     const repos = sourceItems;
@@ -787,6 +1241,14 @@ export default function TrendApp({ initialData = null }) {
         <Stat icon={ShieldCheck} label="数据更新" value={formatGeneratedAt(generatedAt)} hint="静态快照" tone="tone-gray" />
       </section>
 
+      <TodayWorthResearch
+        items={todayItems}
+        onAddResearch={handleAddResearch}
+        onAnalyze={handleAnalyzeRepo}
+        onIgnore={handleIgnoreRepo}
+        queuedIds={queuedIds}
+      />
+
       <section className="group-tabs" aria-label="选择监控分组">
         {groups.map((item) => (
           <button key={item.id} className={group === item.id ? "active" : ""} onClick={() => setGroup(item.id)} title={item.description || item.name}>
@@ -798,8 +1260,25 @@ export default function TrendApp({ initialData = null }) {
       <section className="toolbar" aria-label="筛选和搜索">
         <div className="mode-tabs" role="group" aria-label="选择榜单模式">
           {rankingModes.map((item) => (
-            <button key={item.id} className={mode === item.id ? "active" : ""} onClick={() => setMode(item.id)}>
+            <button
+              key={item.id}
+              className={activeView === item.id ? "active" : ""}
+              onClick={() => {
+                setMode(item.id);
+                setActiveView(item.id);
+              }}
+            >
               {item.name}
+            </button>
+          ))}
+          {personalTabs.map((item) => (
+            <button
+              key={item.id}
+              className={activeView === item.id ? "active personal-tab" : "personal-tab"}
+              onClick={() => setActiveView(item.id)}
+            >
+              {item.name}
+              {item.id === "research" ? ` ${researchQueue.length}` : ` ${ignoredRepos.length}`}
             </button>
           ))}
         </div>
@@ -842,17 +1321,39 @@ export default function TrendApp({ initialData = null }) {
         <section className="list-shell" aria-label="开源项目机会列表">
           <div className="list-header">
             <div>
-              <span>Opportunity Repositories</span>
-              <h2>值得研究的开源项目机会</h2>
+              <span>{listEyebrow}</span>
+              <h2>{listTitle}</h2>
             </div>
-            <strong>{items.length ? `${pageStart + 1}-${pageEnd} / ${items.length}` : "0 repos"}</strong>
+            <strong>{listCount ? `${pageStart + 1}-${pageEnd} / ${listCount}` : "0 repos"}</strong>
           </div>
           <div className="list">
             {loading && Array.from({ length: 6 }).map((_, index) => <div className="skeleton" key={index} />)}
-            {!loading && pageItems.map((repo, index) => <RepoRow repo={repo} rank={pageStart + index + 1} key={repo.id} onOpen={setSelectedRepo} />)}
-            {!loading && !items.length && <div className="empty">这个榜单暂时没有匹配的仓库。换个时间窗口、语言或榜单试试。</div>}
+            {!loading && !isPersonalView && pageItems.map((repo, index) => (
+              <RepoRow
+                repo={repo}
+                rank={pageStart + index + 1}
+                key={repo.id}
+                onOpen={setSelectedRepo}
+                onAddResearch={handleAddResearch}
+                onAnalyze={handleAnalyzeRepo}
+                onIgnore={handleIgnoreRepo}
+                isQueued={queuedIds.has(repoStorageId(repo))}
+              />
+            ))}
+            {!loading && isPersonalView && (
+              <PersonalRepoList
+                type={isResearchView ? "research" : "ignored"}
+                entries={pageItems}
+                repoMap={repoMap}
+                onRemoveResearch={handleRemoveResearch}
+                onRestoreIgnored={handleRestoreIgnored}
+                onAnalyze={handleAnalyzeRepo}
+                onOpen={setSelectedRepo}
+              />
+            )}
+            {!loading && !listCount && !isPersonalView && <div className="empty">这个榜单暂时没有匹配的仓库。换个时间窗口、语言或榜单试试。</div>}
           </div>
-          {!loading && items.length > pageSize && (
+          {!loading && listCount > pageSize && (
             <nav className="pagination" aria-label="Repository pagination">
               <button disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
                 Prev
@@ -867,10 +1368,21 @@ export default function TrendApp({ initialData = null }) {
           )}
         </section>
 
-        <InsightsPanel items={items} languages={languages} generatedAt={generatedAt} sourceData={sourceData} refresh={refresh} />
+        <InsightsPanel items={items} languages={languages} generatedAt={generatedAt} sourceData={sourceData} refresh={refresh} personalInsights={personalInsights} />
       </div>
 
-      <RepoDetailModal repo={selectedRepo} windowHours={windowHours} generatedAt={generatedAt} sourceLabel={sourceLabel} onClose={() => setSelectedRepo(null)} />
+      <RepoDetailModal
+        repo={selectedRepo}
+        windowHours={windowHours}
+        generatedAt={generatedAt}
+        sourceLabel={sourceLabel}
+        onClose={() => setSelectedRepo(null)}
+        onAddResearch={handleAddResearch}
+        onAnalyze={handleAnalyzeRepo}
+        onIgnore={handleIgnoreRepo}
+        isQueued={selectedRepo ? queuedIds.has(repoStorageId(selectedRepo)) : false}
+      />
+      <Toast toast={toast} />
     </>
   );
 }
