@@ -9,6 +9,7 @@ const rootDir = path.resolve(__dirname, "..");
 const outputDir = path.join(rootDir, "public", "data");
 const outputFile = path.join(outputDir, "trending.json");
 const windows = [6, 24, 72, 168];
+const staticRankingLimit = 80;
 
 export function exportStaticData(refreshResult = null) {
   fs.mkdirSync(outputDir, { recursive: true });
@@ -22,7 +23,7 @@ export function exportStaticData(refreshResult = null) {
           getTrending({
             group: group.id,
             windowHours,
-            limit: 100
+            limit: staticRankingLimit
           })
         ])
       )
