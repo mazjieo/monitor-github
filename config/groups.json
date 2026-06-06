@@ -1,108 +1,150 @@
 {
   "groups": [
     {
-      "id": "ai",
-      "name": "AI",
-      "description": "AI 应用、智能体、多模态、生成式工具和自动化工作流。",
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "description": "AI Agent、自动化工作流、Browser Agent、Coding Agent、Computer Use、工具调用、多智能体框架。",
       "queries": [
-        { "query": "topic:ai", "sort": "updated" },
-        { "query": "topic:artificial-intelligence", "sort": "updated" },
-        { "query": "topic:generative-ai", "sort": "updated" },
-        { "query": "\"ai agent\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"ai workflow\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"computer vision\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"image generation\" in:name,description,readme", "sort": "updated" }
-      ]
-    },
-    {
-      "id": "llm",
-      "name": "LLM",
-      "description": "大语言模型生态、RAG、推理、评测、MCP、Prompt 和 Agent 框架。",
-      "queries": [
-        { "query": "topic:llm", "sort": "updated" },
-        { "query": "topic:rag", "sort": "updated" },
-        { "query": "topic:mcp", "sort": "updated" },
         { "query": "topic:agents", "sort": "updated" },
-        { "query": "\"large language model\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"llm framework\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"prompt engineering\" in:name,description,readme", "sort": "updated" },
+        { "query": "topic:ai-agent", "sort": "updated" },
+        { "query": "\"ai agent\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"browser agent\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"coding agent\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"computer use\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"multi agent\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"workflow agent\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "mcp-ai-infra",
+      "name": "MCP / AI Infra",
+      "description": "MCP、LLM 工具链、RAG、Embedding、推理服务、模型网关、Agent 基础设施。",
+      "queries": [
+        { "query": "topic:mcp", "sort": "updated" },
+        { "query": "\"model context protocol\" in:name,description,readme", "sort": "updated" },
+        { "query": "topic:rag", "sort": "updated" },
+        { "query": "topic:llm", "sort": "updated" },
         { "query": "embedding in:name,description,readme", "sort": "updated" },
-        { "query": "inference in:name,description,readme", "sort": "updated" }
+        { "query": "inference in:name,description,readme", "sort": "updated" },
+        { "query": "\"llm gateway\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"ai infrastructure\" in:name,description,readme", "sort": "updated" }
       ]
     },
     {
-      "id": "frontend-visual-interaction",
-      "name": "视觉交互",
-      "description": "前端动效、交互、可视化、Canvas、WebGL、Shader、滚动和手势体验。",
+      "id": "ai-apps",
+      "name": "AI Apps",
+      "description": "面向用户的 AI 应用、多模态工具、图片/视频/语音生成、AI 办公、AI 创作工具。",
       "queries": [
-        { "query": "topic:animation language:javascript", "sort": "updated" },
-        { "query": "topic:animation language:typescript", "sort": "updated" },
-        { "query": "topic:canvas language:javascript", "sort": "updated" },
-        { "query": "topic:webgl language:typescript", "sort": "updated" },
-        { "query": "topic:threejs", "sort": "updated" },
-        { "query": "topic:gsap", "sort": "updated" },
-        { "query": "\"scroll animation\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"interactive visualization\" in:name,description,readme", "sort": "updated" },
-        { "query": "shader in:name,description,readme language:typescript", "sort": "updated" }
+        { "query": "\"ai app\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"ai assistant\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"image generation\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"video generation\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"voice ai\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"ai productivity\" in:name,description,readme", "sort": "updated" },
+        { "query": "topic:generative-ai", "sort": "updated" }
       ]
     },
     {
-      "id": "frontend-creative-design",
-      "name": "创意页面",
-      "description": "创意页面、落地页、作品集、模板、设计系统展示和高完成度网站体验。",
+      "id": "saas-starter",
+      "name": "SaaS Starter",
+      "description": "SaaS 模板、Boilerplate、Starter、认证、支付、订阅、多租户、后台管理。",
       "queries": [
-        { "query": "\"creative website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"saas starter\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"saas boilerplate\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"nextjs starter\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"stripe subscription\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"multi tenant\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"auth starter\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"admin dashboard\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "indie-growth",
+      "name": "Indie Growth",
+      "description": "独立开发者获客、SEO、目录站、Newsletter、Waitlist、Landing Page、内容增长工具。",
+      "queries": [
+        { "query": "\"programmatic seo\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"directory website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"website directory\" in:name,description,readme", "sort": "updated" },
         { "query": "\"landing page\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"portfolio website\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"website template\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"nextjs template\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"framer\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"design system\" in:name,description,readme frontend", "sort": "updated" }
+        { "query": "\"waitlist\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"newsletter\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"growth tool\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"lead generation\" in:name,description,readme", "sort": "updated" }
       ]
     },
     {
-      "id": "java",
-      "name": "Java",
-      "description": "Java/JVM、Spring、后端中间件、开发工具和工程实践。",
+      "id": "frontend-ui",
+      "name": "Frontend UI",
+      "description": "前端 UI、组件库、设计系统、Dashboard、Admin、模板、可直接抄作业的界面项目。",
+      "queries": [
+        { "query": "topic:ui", "sort": "updated" },
+        { "query": "topic:components", "sort": "updated" },
+        { "query": "\"design system\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"react components\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"shadcn\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"dashboard template\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"admin template\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"tailwind template\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "creative-web",
+      "name": "Creative Web",
+      "description": "创意网页、动效、Canvas、WebGL、Three.js、Shader、作品集、视觉交互。",
+      "queries": [
+        { "query": "topic:threejs", "sort": "updated" },
+        { "query": "topic:webgl", "sort": "updated" },
+        { "query": "topic:canvas", "sort": "updated" },
+        { "query": "topic:animation", "sort": "updated" },
+        { "query": "\"creative website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"interactive website\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"scroll animation\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"shader\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"portfolio website\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "dev-tools",
+      "name": "Dev Tools",
+      "description": "开发者工具、CLI、代码生成、测试、调试、数据库工具、部署工具、效率工具。",
+      "queries": [
+        { "query": "topic:cli", "sort": "updated" },
+        { "query": "topic:developer-tools", "sort": "updated" },
+        { "query": "\"dev tool\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"code generator\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"database tool\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"debugging tool\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"deployment tool\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"productivity tool\" in:name,description,readme", "sort": "updated" }
+      ]
+    },
+    {
+      "id": "java-backend",
+      "name": "Java / Backend",
+      "description": "Java、Spring、JVM、后端中间件、企业开发、后端工程实践。",
       "queries": [
         { "query": "language:java", "sort": "updated" },
         { "query": "topic:spring-boot", "sort": "updated" },
         { "query": "topic:jvm", "sort": "updated" },
         { "query": "topic:java", "sort": "updated" },
+        { "query": "\"spring cloud\" in:name,description,readme", "sort": "updated" },
         { "query": "\"java agent\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"spring cloud\" in:name,description,readme", "sort": "updated" }
+        { "query": "\"backend framework\" in:name,description,readme", "sort": "updated" }
       ]
     },
     {
-      "id": "indie-sites",
-      "name": "独立站",
-      "description": "帮助独立开发者把网站做出来、推出去、卖起来、运营起来的建站、获客、支付、内容和增长工具。",
-      "queries": [
-        { "query": "\"saas starter\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"saas boilerplate\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"landing page\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"stripe subscription\" in:name,description,readme", "sort": "updated" },
-        { "query": "lemonsqueezy in:name,description,readme", "sort": "updated" },
-        { "query": "\"programmatic seo\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"website builder\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"directory website\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"waitlist\" in:name,description,readme startup", "sort": "updated" },
-        { "query": "\"newsletter\" in:name,description,readme saas", "sort": "updated" }
-      ]
-    },
-    {
-      "id": "toon-3d",
-      "name": "三渲二",
-      "description": "三渲二、Toon/Cel Shading、NPR、风格化 3D、动漫感实时渲染和相关工具。",
+      "id": "niche-creative-tech",
+      "name": "Niche Creative Tech",
+      "description": "小众创意技术：三渲二、Toon Shading、NPR、游戏工具、风格化渲染、实时图形。",
       "queries": [
         { "query": "\"toon shading\" in:name,description,readme", "sort": "updated" },
         { "query": "\"cel shading\" in:name,description,readme", "sort": "updated" },
         { "query": "\"non photorealistic rendering\" in:name,description,readme", "sort": "updated" },
         { "query": "\"npr rendering\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"stylized rendering\" in:name,description,readme", "sort": "updated" },
         { "query": "\"anime shader\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"threejs toon\" in:name,description,readme", "sort": "updated" },
-        { "query": "\"unity toon\" in:name,description,readme", "sort": "updated" }
+        { "query": "\"stylized rendering\" in:name,description,readme", "sort": "updated" },
+        { "query": "\"game tool\" in:name,description,readme", "sort": "updated" }
       ]
     },
     {
