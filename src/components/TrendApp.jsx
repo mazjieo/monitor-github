@@ -48,6 +48,7 @@ const personalTabs = [
   { id: "research", name: "研究队列" },
   { id: "ignored", name: "已忽略" }
 ];
+const ignoreReasons = ["不相关", "资源合集", "套壳/Demo", "质量低", "已看过", "其他"];
 
 const numberFmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 const fullNumberFmt = new Intl.NumberFormat("en");
@@ -135,9 +136,29 @@ function repoStorageId(repo) {
   return String(repo?.repoId ?? repo?.id ?? repo?.fullName ?? "");
 }
 
+function normalizeStringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()) : [];
+}
+
 function normalizeStoredRepos(value) {
   return Array.isArray(value)
-    ? value.filter((item) => item && (item.repoId || item.fullName)).map((item) => ({ ...item, repoId: item.repoId ?? item.fullName }))
+    ? value
+        .filter((item) => item && typeof item === "object" && (item.repoId || item.fullName))
+        .map((item) => ({
+          ...item,
+          repoId: item.repoId ?? item.fullName,
+          fullName: item.fullName || String(item.repoId || ""),
+          url: item.url || "",
+          description: item.description || "",
+          language: item.language || "",
+          reason: item.reason || "其他",
+          topics: normalizeStringArray(item.topics),
+          opportunityTags: normalizeStringArray(item.opportunityTags),
+          whyNow: normalizeStringArray(item.whyNow),
+          opportunityScore: Number.isFinite(Number(item.opportunityScore)) ? Number(item.opportunityScore) : undefined,
+          discoveryScore: Number.isFinite(Number(item.discoveryScore)) ? Number(item.discoveryScore) : undefined,
+          confidenceScore: Number.isFinite(Number(item.confidenceScore)) ? Number(item.confidenceScore) : undefined
+        }))
     : [];
 }
 
@@ -180,6 +201,61 @@ function getAllRankingRepos(sourceData) {
   const rankings = sourceData?.rankings || {};
   const repos = Object.values(rankings).flat();
   return repos.length ? repos : sourceData?.items || [];
+}
+
+function buildResearchEntry(repo) {
+  return {
+    repoId: repo.id,
+    fullName: repo.fullName,
+    url: repo.url || "",
+    description: repo.description || "",
+    language: repo.language || "",
+    topics: normalizeStringArray(repo.topics),
+    addedAt: new Date().toISOString(),
+    opportunityTier: repo.opportunityTier || "",
+    opportunityTags: normalizeStringArray(repo.opportunityTags),
+    whyNow: normalizeStringArray(repo.whyNow),
+    opportunityScore: repo.opportunityScore,
+    discoveryScore: repo.discoveryScore,
+    confidenceScore: repo.confidenceScore
+  };
+}
+
+function buildIgnoredEntry(repo, reason = "其他") {
+  return {
+    repoId: repo.id,
+    fullName: repo.fullName,
+    url: repo.url || "",
+    ignoredAt: new Date().toISOString(),
+    reason,
+    opportunityTags: normalizeStringArray(repo.opportunityTags),
+    opportunityScore: repo.opportunityScore,
+    discoveryScore: repo.discoveryScore,
+    confidenceScore: repo.confidenceScore,
+    language: repo.language || ""
+  };
+}
+
+function mergeStoredRepo(entry, repo) {
+  return {
+    ...(entry || {}),
+    ...(repo || {}),
+    repoId: entry?.repoId ?? repo?.id,
+    id: repo?.id ?? entry?.repoId,
+    fullName: repo?.fullName || entry?.fullName || String(entry?.repoId || ""),
+    url: repo?.url || entry?.url || "",
+    description: repo?.description || entry?.description || "",
+    language: repo?.language || entry?.language || "",
+    topics: normalizeStringArray(repo?.topics).length ? normalizeStringArray(repo?.topics) : normalizeStringArray(entry?.topics),
+    opportunityTags: normalizeStringArray(entry?.opportunityTags).length
+      ? normalizeStringArray(entry?.opportunityTags)
+      : normalizeStringArray(repo?.opportunityTags),
+    whyNow: normalizeStringArray(entry?.whyNow).length ? normalizeStringArray(entry?.whyNow) : normalizeStringArray(repo?.whyNow),
+    opportunityTier: repo?.opportunityTier || entry?.opportunityTier || "",
+    opportunityScore: repo?.opportunityScore ?? entry?.opportunityScore,
+    discoveryScore: repo?.discoveryScore ?? entry?.discoveryScore,
+    confidenceScore: repo?.confidenceScore ?? entry?.confidenceScore
+  };
 }
 
 function buildAnalysisPrompt(repo) {
@@ -231,7 +307,11 @@ function countTags(entries, repoMap) {
   const counts = new Map();
   entries.forEach((entry) => {
     const repo = repoMap.get(repoStorageId(entry));
-    (repo?.opportunityTags || []).forEach((tag) => {
+    const tags = [
+      ...normalizeStringArray(entry.opportunityTags),
+      ...normalizeStringArray(repo?.opportunityTags)
+    ];
+    [...new Set(tags)].forEach((tag) => {
       counts.set(tag, (counts.get(tag) || 0) + 1);
     });
   });
@@ -241,14 +321,15 @@ function countTags(entries, repoMap) {
 }
 
 function entryMatchesFilters(entry, repo, language, query) {
-  if (language && repo?.language?.toLowerCase() !== language.toLowerCase()) return false;
+  const displayRepo = mergeStoredRepo(entry, repo);
+  if (language && displayRepo.language?.toLowerCase() !== language.toLowerCase()) return false;
   if (!query.trim()) return true;
 
   const needle = query.trim().toLowerCase();
   return (
-    String(repo?.fullName || entry.fullName || "").toLowerCase().includes(needle) ||
-    String(repo?.description || "").toLowerCase().includes(needle) ||
-    (repo?.topics || []).some((topic) => topic.toLowerCase().includes(needle))
+    String(displayRepo.fullName || "").toLowerCase().includes(needle) ||
+    String(displayRepo.description || "").toLowerCase().includes(needle) ||
+    normalizeStringArray(displayRepo.topics).some((topic) => topic.toLowerCase().includes(needle))
   );
 }
 
@@ -820,22 +901,24 @@ function PersonalRepoList({ type, entries, repoMap, onRemoveResearch, onRestoreI
   return (
     <div className="personal-list">
       {entries.map(({ entry, repo }) => {
-        const title = repo?.fullName || entry.fullName || entry.repoId;
+        const displayRepo = mergeStoredRepo(entry, repo);
+        const title = displayRepo.fullName || entry.repoId;
         const date = entry.addedAt || entry.ignoredAt;
         return (
           <article className="personal-row" key={repoStorageId(entry)}>
             <div className="personal-main">
-              {repo?.url ? (
-                <a href={repo.url} target="_blank" rel="noreferrer">
+              {displayRepo.url ? (
+                <a href={displayRepo.url} target="_blank" rel="noreferrer">
                   {title}
                   <ArrowUpRight size={14} />
                 </a>
               ) : (
                 <strong>{title}</strong>
               )}
-              <p>{repo?.description || (type === "research" ? "这个项目暂时不在当前数据窗口内，保留在队列中待后续复查。" : "已从榜单隐藏，可随时恢复。")}</p>
+              <p>{displayRepo.description || (type === "research" ? "这个项目暂时不在当前数据窗口内，保留在队列中待后续复查。" : "已从榜单隐藏，可随时恢复。")}</p>
+              {type === "ignored" && <span className="ignore-reason">原因：{entry.reason || "其他"}</span>}
               <div className="opportunity-tags">
-                {(repo?.opportunityTags || []).slice(0, 4).map((tag) => (
+                {normalizeStringArray(displayRepo.opportunityTags).slice(0, 4).map((tag) => (
                   <span key={tag} className={isReviewTag(tag) ? "review" : ""}>
                     {tag}
                   </span>
@@ -845,9 +928,9 @@ function PersonalRepoList({ type, entries, repoMap, onRemoveResearch, onRestoreI
             <div className="personal-meta">
               <span>{type === "research" ? "加入时间" : "忽略时间"}</span>
               <strong>{timeAgo(date)}</strong>
-              <small>机会 {formatScore(repo?.opportunityScore ?? entry.opportunityScore)}</small>
-              <small>发现 {formatScore(repo?.discoveryScore ?? entry.discoveryScore)}</small>
-              <small>{confidenceLabel(repo?.confidenceScore ?? entry.confidenceScore)} {formatScore(repo?.confidenceScore ?? entry.confidenceScore)}</small>
+              <small>机会 {formatScore(displayRepo.opportunityScore)}</small>
+              <small>发现 {formatScore(displayRepo.discoveryScore)}</small>
+              <small>{confidenceLabel(displayRepo.confidenceScore)} {formatScore(displayRepo.confidenceScore)}</small>
             </div>
             <div className="personal-actions">
               {repo && (
@@ -856,8 +939,8 @@ function PersonalRepoList({ type, entries, repoMap, onRemoveResearch, onRestoreI
                   详情
                 </button>
               )}
-              {repo?.url && (
-                <button onClick={() => onAnalyze(repo)}>
+              {displayRepo.url && (
+                <button onClick={() => onAnalyze(displayRepo)}>
                   <Copy size={15} />
                   分析
                 </button>
@@ -919,6 +1002,37 @@ function PersonalInsights({ insights }) {
 function Toast({ toast }) {
   if (!toast) return null;
   return <div className={`toast ${toast.type || ""}`}>{toast.message}</div>;
+}
+
+function IgnoreReasonDialog({ repo, onChoose, onCancel }) {
+  if (!repo) return null;
+
+  return (
+    <div className="modal-backdrop compact-backdrop" onClick={onCancel}>
+      <section className="ignore-dialog" role="dialog" aria-modal="true" aria-label="选择忽略原因" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <span className="section-kicker">
+              <EyeOff size={16} />
+              Ignore
+            </span>
+            <h2>为什么忽略这个项目？</h2>
+            <p>{repo.fullName}</p>
+          </div>
+          <button className="icon-button" onClick={onCancel} aria-label="关闭忽略原因选择">
+            <X size={20} />
+          </button>
+        </header>
+        <div className="reason-options">
+          {ignoreReasons.map((reason) => (
+            <button key={reason} onClick={() => onChoose(reason)} className={reason === "其他" ? "default" : ""}>
+              {reason}
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function InsightsPanel({ items, languages, generatedAt, sourceData, refresh, personalInsights }) {
@@ -1007,6 +1121,7 @@ export default function TrendApp({ initialData = null }) {
   const [page, setPage] = useState(1);
   const [refreshTick, setRefreshTick] = useState(0);
   const [selectedRepo, setSelectedRepo] = useState(null);
+  const [pendingIgnoreRepo, setPendingIgnoreRepo] = useState(null);
   const [toast, setToast] = useState(null);
   const [ignoredRepos, setIgnoredRepos] = useStoredRepoList(ignoredStorageKey);
   const [researchQueue, setResearchQueue] = useStoredRepoList(researchQueueStorageKey);
@@ -1069,17 +1184,7 @@ export default function TrendApp({ initialData = null }) {
     const repoId = repoStorageId(repo);
     setResearchQueue((current) => {
       if (current.some((item) => repoStorageId(item) === repoId)) return current;
-      return [
-        {
-          repoId: repo.id,
-          fullName: repo.fullName,
-          addedAt: new Date().toISOString(),
-          opportunityScore: repo.opportunityScore,
-          discoveryScore: repo.discoveryScore,
-          confidenceScore: repo.confidenceScore
-        },
-        ...current
-      ];
+      return [buildResearchEntry(repo), ...current];
     });
     showToast("已加入研究队列");
   };
@@ -1091,20 +1196,20 @@ export default function TrendApp({ initialData = null }) {
   };
 
   const handleIgnoreRepo = (repo) => {
+    setPendingIgnoreRepo(repo);
+  };
+
+  const handleConfirmIgnore = (reason = "其他") => {
+    const repo = pendingIgnoreRepo;
+    if (!repo) return;
     const repoId = repoStorageId(repo);
     setIgnoredRepos((current) => {
       if (current.some((item) => repoStorageId(item) === repoId)) return current;
-      return [
-        {
-          repoId: repo.id,
-          fullName: repo.fullName,
-          ignoredAt: new Date().toISOString()
-        },
-        ...current
-      ];
+      return [buildIgnoredEntry(repo, reason), ...current];
     });
+    setPendingIgnoreRepo(null);
     if (selectedRepo && repoStorageId(selectedRepo) === repoId) setSelectedRepo(null);
-    showToast("已忽略该仓库");
+    showToast(`已忽略该仓库：${reason}`);
   };
 
   const handleRestoreIgnored = (repoId) => {
@@ -1171,15 +1276,16 @@ export default function TrendApp({ initialData = null }) {
   }, [group]);
 
   useEffect(() => {
-    if (!selectedRepo) return undefined;
+    if (!selectedRepo && !pendingIgnoreRepo) return undefined;
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") setSelectedRepo(null);
+      if (event.key === "Escape") setPendingIgnoreRepo(null);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedRepo]);
+  }, [selectedRepo, pendingIgnoreRepo]);
 
   const isResearchView = activeView === "research";
   const isIgnoredView = activeView === "ignored";
@@ -1382,6 +1488,7 @@ export default function TrendApp({ initialData = null }) {
         onIgnore={handleIgnoreRepo}
         isQueued={selectedRepo ? queuedIds.has(repoStorageId(selectedRepo)) : false}
       />
+      <IgnoreReasonDialog repo={pendingIgnoreRepo} onChoose={handleConfirmIgnore} onCancel={() => setPendingIgnoreRepo(null)} />
       <Toast toast={toast} />
     </>
   );

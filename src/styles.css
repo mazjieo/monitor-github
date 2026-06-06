@@ -1405,6 +1405,20 @@ select {
   line-height: 1.5;
 }
 
+.ignore-reason {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 9px;
+  padding: 5px 8px;
+  color: #9a3412;
+  background: #ffedd5;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .personal-meta {
   display: grid;
   gap: 4px;
@@ -1484,6 +1498,63 @@ select {
   color: #9f1239;
   background: #ffe4e6;
   border-color: #fecdd3;
+}
+
+.compact-backdrop {
+  z-index: 130;
+}
+
+.ignore-dialog {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.28);
+}
+
+.ignore-dialog header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.ignore-dialog h2 {
+  margin: 8px 0 4px;
+  font-size: 20px;
+}
+
+.ignore-dialog p {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.reason-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reason-options button {
+  min-height: 40px;
+  color: #344054;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 780;
+}
+
+.reason-options button:hover,
+.reason-options button.default {
+  color: #9a3412;
+  background: #ffedd5;
+  border-color: #fed7aa;
 }
 
 .alert,
@@ -1688,6 +1759,10 @@ select {
 
   .modal-actions,
   .personal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reason-options {
     grid-template-columns: 1fr;
   }
 
